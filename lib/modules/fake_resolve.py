@@ -412,6 +412,8 @@ class _Project:
         return True
 
     def StopRendering(self) -> None:
+        # 真实 API 的 StopRendering 不返回值；模拟器同样返回 None。
+        # 渲染状态由 StartRendering 直接置为 Complete，因此这里无需额外处理。
         return None
 
     def IsRenderingInProgress(self) -> bool:
@@ -721,6 +723,7 @@ class _MediaPoolItem:
         return copy.deepcopy(self._markers)
 
     def GetTimeline(self) -> Any:
+        # 素材池条目不是时间线条目时，真实 API 返回 None（契约行为）。
         return None
 
     def _duration(self) -> int:
@@ -980,6 +983,7 @@ class _Timeline:
         return self._graph
 
     def GetMediaPoolItem(self) -> Any:
+        # 时间线条目若不对应素材池条目（如字幕/生成器），真实 API 返回 None。
         return None
 
     def GetSettings(self) -> dict[str, str]:
@@ -1331,9 +1335,11 @@ class _Gallery:
         return []
 
     def CreateGalleryStillAlbum(self) -> Any:
+        # 模拟器不实现静帧相册：真实 API 在无相册时也可能返回 None。
         return None
 
     def GetCurrentStillAlbum(self) -> Any:
+        # 模拟器没有当前静帧相册；真实 API 同样可能返回 None。
         return None
 
 

@@ -1,0 +1,67 @@
+{
+  "meta": {
+    "title": "DaVinci Resolve 青青桥接",
+    "description": "把 DeepSeek Harness 连到 DaVinci Resolve Studio：36 个工具覆盖环境自检、媒体归档、时间线剪辑、调色节点与 LUT/DRX、Fusion 合成、Deliver 渲染队列。批量写入前自动保存工程并复制备份时间线。",
+    "detail": "docs/DETAIL.md"
+  },
+  "config": {
+    "pythonPath": {
+      "label": "Python 解释器",
+      "description": "留空则自动探测（.venv → python → python3）。需要时填 python.exe 的绝对路径。"
+    },
+    "toolTimeoutMs": {
+      "label": "工具调用超时（毫秒）",
+      "description": "单次达芬奇操作的最长等待时间。渲染类操作建议保持在 3 分钟以上。"
+    },
+    "startupTimeoutMs": {
+      "label": "桥启动超时（毫秒）",
+      "description": "Python 桥首次启动的等待时间，首次导入依赖会慢一些。"
+    },
+    "failOnStartupError": {
+      "label": "桥启动失败时阻止插件加载",
+      "description": "关闭时桥起不来只是没有工具，不会拖垮 DSH 启动。"
+    },
+    "enabled": {
+      "label": "启用插件",
+      "description": "关闭后全部工具立即消失，但插件仍保持安装。"
+    }
+  },
+  "tools": {
+    "qing_resolve_health": "Resolve 环境自检",
+    "qing_resolve_version": "读取 Resolve 版本",
+    "qing_project_overview": "工程与时间线总览",
+    "qing_open_page": "切换 Resolve 页面",
+    "qing_media_scan_folder": "预扫素材目录",
+    "qing_media_import_folder": "递归导入素材到媒体池",
+    "qing_media_auto_bin": "按机位/日期自动分箱",
+    "qing_media_list_bins": "列出素材箱树",
+    "qing_media_set_metadata": "批量写素材元数据",
+    "qing_media_search": "在媒体池里搜索素材",
+    "qing_media_markers_to_subclips": "按标记生成子剪辑",
+    "qing_timeline_inspect": "读取时间线结构",
+    "qing_timeline_create": "新建时间线",
+    "qing_timeline_add_clips": "向轨道追加/插入片段",
+    "qing_timeline_get_clip_properties": "读取片段属性",
+    "qing_timeline_set_clip_properties": "批量修改片段属性",
+    "qing_timeline_add_markers": "批量添加彩色标记",
+    "qing_timeline_read_markers": "读取时间线标记",
+    "qing_timeline_import_srt": "导入 SRT 字幕",
+    "qing_timeline_set_track_state": "设置轨道锁定/启用",
+    "qing_timeline_delete_clips": "批量删除时间线片段",
+    "qing_color_inspect_nodes": "解析片段节点树",
+    "qing_color_set_lut": "在节点上挂载 3D LUT",
+    "qing_color_set_node_enabled": "启用/旁通节点",
+    "qing_color_copy_grade": "批量复制调色",
+    "qing_color_apply_drx": "应用 .drx 预设（PowerGrade）",
+    "qing_color_grab_frame": "导出当前帧做视觉审片",
+    "qing_fusion_inspect": "查看片段 Fusion 合成",
+    "qing_fusion_add_tool": "添加 Fusion 节点",
+    "qing_fusion_set_input": "修改 Fusion 节点属性",
+    "qing_deliver_list_presets": "列出交付渲染预设",
+    "qing_deliver_setup_job": "配置并添加渲染任务",
+    "qing_deliver_queue_status": "查询交付队列状态",
+    "qing_deliver_start": "开始渲染",
+    "qing_deliver_stop": "停止渲染",
+    "qing_deliver_delete_jobs": "删除队列任务"
+  }
+}

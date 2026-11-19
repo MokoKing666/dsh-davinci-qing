@@ -44,3 +44,11 @@ desktop.ini
 .env
 .env.*
 !.env.example
+
+# ---- 构建与依赖 ----
+node_modules/
+dist/__pycache__/
+*.tsbuildinfo
+
+# ---- 本地审计日志 ----
+audit.jsonl

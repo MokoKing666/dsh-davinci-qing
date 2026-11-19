@@ -1,0 +1,69 @@
+# dsh-davinci-qing — English localization (YAML variant)
+#
+# Note: the DSH loader reads `locale/*.json` (en.json shares this content).
+# This YAML file mirrors it for human review and external tooling;
+# `npm run check:locale` verifies the two stay identical.
+
+meta:
+  title: DaVinci Resolve bridge
+  description: >-
+    Connects DeepSeek Harness to DaVinci Resolve Studio: 36 tools for environment
+    checks, media archiving, timeline editing, color nodes with LUT/DRX, Fusion
+    comps, and the Deliver queue. Bulk writes save the project and duplicate the
+    timeline first.
+  detail: docs/DETAIL.md
+
+config:
+  pythonPath:
+    label: Python interpreter
+    description: Leave empty to auto-detect (.venv, then python, then python3). Set an absolute python.exe path when needed.
+  toolTimeoutMs:
+    label: Tool timeout (ms)
+    description: Longest wait for one Resolve operation. Render jobs should stay at three minutes or more.
+  startupTimeoutMs:
+    label: Bridge startup timeout (ms)
+    description: How long to wait for the Python bridge on first start; the first dependency import is slower.
+  failOnStartupError:
+    label: Block plugin load when the bridge fails
+    description: When off, a failed bridge only means no tools, and never delays DSH startup.
+  enabled:
+    label: Enable plugin
+    description: Turning this off removes every tool immediately while the plugin stays installed.
+
+tools:
+  qing_resolve_health: Resolve environment self-check
+  qing_resolve_version: Read the Resolve version
+  qing_project_overview: Project and timeline overview
+  qing_open_page: Switch the Resolve page
+  qing_media_scan_folder: Preview a media folder
+  qing_media_import_folder: Import a folder into the media pool
+  qing_media_auto_bin: Auto-bin by camera or date
+  qing_media_list_bins: List the bin tree
+  qing_media_set_metadata: Write clip metadata in bulk
+  qing_media_search: Search the media pool
+  qing_media_markers_to_subclips: Turn markers into subclips
+  qing_timeline_inspect: Read the timeline structure
+  qing_timeline_create: Create a timeline
+  qing_timeline_add_clips: Append or insert clips
+  qing_timeline_get_clip_properties: Read clip properties
+  qing_timeline_set_clip_properties: Rewrite clip properties in bulk
+  qing_timeline_add_markers: Add colored markers in bulk
+  qing_timeline_read_markers: Read timeline markers
+  qing_timeline_import_srt: Import an SRT subtitle track
+  qing_timeline_set_track_state: Lock or enable a track
+  qing_timeline_delete_clips: Delete timeline clips in bulk
+  qing_color_inspect_nodes: Inspect the node graph
+  qing_color_set_lut: Apply a 3D LUT to a node
+  qing_color_set_node_enabled: Enable or bypass a node
+  qing_color_copy_grade: Copy a grade across clips
+  qing_color_apply_drx: Apply a .drx PowerGrade
+  qing_color_grab_frame: Export the current frame for review
+  qing_fusion_inspect: Inspect a Fusion comp
+  qing_fusion_add_tool: Add a Fusion node
+  qing_fusion_set_input: Change a Fusion node input
+  qing_deliver_list_presets: List render presets
+  qing_deliver_setup_job: Configure and queue a render job
+  qing_deliver_queue_status: Read the render queue
+  qing_deliver_start: Start rendering
+  qing_deliver_stop: Stop rendering
+  qing_deliver_delete_jobs: Remove render queue jobs

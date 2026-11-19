@@ -1,0 +1,30 @@
+# dsh-davinci-qing —— Cordis 插件清单与默认配置
+#
+# 说明：DSH 加载器实际读取的是 `cordis.patch.yml`（`package.json` 的
+# `dsh.bundle.patch` 指向它）。本文件是两个文件中的「可读清单」版本：它用同样的
+# row 结构声明插件身份与全部默认配置，便于人阅读、便于其它工具消费，也便于把
+# 配置整段复制到自己的 profile patch 里做覆盖。
+#
+# 两份文件的内容必须保持一致；`npm run check:cordis` 会做这个比对。
+
+- insert:
+    - id: mcp-davinci-qing
+      name: 'dsh-davinci-qing'
+      config:
+        # Python 解释器。留空 = 按 `.venv` → `python` → `python3` 顺序探测。
+        # 需要指定时写绝对路径，例如 'C:\Program Files\Python313\python.exe'。
+        pythonPath: ''
+        # lib/resolve_bridge.py 的位置；留空用包内默认。
+        bridgePath: ''
+        # 单次工具调用超时（毫秒）。达芬奇渲染或等待模态对话框时会很久。
+        toolTimeoutMs: 180000
+        # Python 桥启动超时（毫秒）。首次导入 PIL / mcp SDK 会慢一些。
+        startupTimeoutMs: 60000
+        # Python 桥起不来时是否让插件加载失败。
+        # false = 只是没有工具（推荐，避免拖垮整个 DSH 启动）。
+        failOnStartupError: false
+        # 透传给 Python 桥的环境变量。
+        # 例如 { QING_DAVINCI_FAKE: '1' } 可切换到内置模拟器（无需安装达芬奇）。
+        env: {}
+        # 关掉可临时禁用全部工具，而不卸载插件。
+        enabled: true

@@ -43,11 +43,11 @@ def fake_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("QING_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setenv("QING_TEMP_DIR", str(tmp_path / "previews"))
 
-    import dsh_davinci_qing.fake_resolve as fake
+    import lib.modules.fake_resolve as fake
 
     fake._reset_state()
 
-    import dsh_davinci_qing.resolve_connector as connector
+    import lib.modules.resolve_connector as connector
 
     connector._SESSION = None  # 丢弃进程级单例
     session = connector.get_session(force_new=True)
@@ -60,7 +60,7 @@ def _call(tool_name: str, /, **kwargs):
 
     import asyncio
 
-    from dsh_davinci_qing.server import build_server
+    from lib.server import build_server
 
     server = build_server()
     result = asyncio.run(server.call_tool(tool_name, kwargs))
@@ -101,7 +101,7 @@ def test_version_and_overview(fake_env):
 
 
 def test_checkpoint_creates_backup(fake_env):
-    from dsh_davinci_qing.safety_guard import resolve_checkpoint
+    from lib.modules.safety_guard import resolve_checkpoint
 
     session = fake_env["session"]
     project = session.project()
@@ -451,7 +451,7 @@ def test_color_apply_drx_scopes(fake_env, drx_file):
 def test_color_grab_frame_returns_image(fake_env):
     import asyncio
 
-    from dsh_davinci_qing.server import build_server
+    from lib.server import build_server
 
     server = build_server()
     result = asyncio.run(server.call_tool("qing_color_grab_frame", {"tag": "unit_test"}))
@@ -548,7 +548,7 @@ def test_deliver_rejects_unknown_preset(fake_env):
 
 
 def test_srt_parser_tolerates_messy_input():
-    from dsh_davinci_qing.subtitle_srt import parse_srt_document
+    from lib.modules.subtitle_srt import parse_srt_document
 
     messy = (
         "\ufeff1\r\n00:00:01.000 --> 00:00:02.500\r\n第一句\r\n\r\n"
@@ -563,7 +563,7 @@ def test_srt_parser_tolerates_messy_input():
 
 
 def test_srt_roundtrip(tmp_path: Path):
-    from dsh_davinci_qing.subtitle_srt import Cue, dump_srt, parse_srt
+    from lib.modules.subtitle_srt import Cue, dump_srt, parse_srt
 
     cues = [Cue(index=1, start_seconds=1.0, end_seconds=2.5, text="青青")]
     text = dump_srt(cues)

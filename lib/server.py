@@ -34,12 +34,12 @@ import sys
 from typing import Any
 
 from . import __slogan__, __version__
-from .mcp_compat import create_server, server_implementation
-from .color_tools import register as register_color
-from .fusion_deliver_tools import register as register_fusion_deliver
-from .media_pool_tools import register as register_media_pool
-from .resolve_tools import register as register_resolve
-from .timeline_tools import register as register_timeline
+from .modules.mcp_compat import create_server, server_implementation
+from .modules.color_tools import register as register_color
+from .modules.fusion_deliver_tools import register as register_fusion_deliver
+from .modules.media_pool_tools import register as register_media_pool
+from .modules.resolve_tools import register as register_resolve
+from .modules.timeline_tools import register as register_timeline
 
 SERVER_NAME = "dsh-davinci-qing"
 

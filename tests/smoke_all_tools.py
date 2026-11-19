@@ -93,7 +93,7 @@ def setup_media_markers() -> None:
     真实场景里这些标记来自源监视器；模拟器直接对 MediaPoolItem 调 AddMarker。
     """
 
-    from dsh_davinci_qing.resolve_connector import get_session
+    from lib.modules.resolve_connector import get_session
 
     session = get_session()
     pool = session.media_pool()
@@ -113,7 +113,7 @@ def _walk_clips(folder):
 
 
 async def main() -> int:
-    from dsh_davinci_qing.server import build_server
+    from lib.server import build_server
 
     server = build_server()
     registered = {tool.name for tool in await server.list_tools()}
