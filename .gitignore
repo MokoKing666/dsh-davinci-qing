@@ -5,7 +5,8 @@ __pycache__/
 *.so
 .Python
 build/
-dist/
+# 注意：不要忽略 dist/ —— 它是 Cordis TS 插件的编译产物，
+# package.json 的 main/types 都指向 dist/，必须提交进仓库。
 *.egg-info/
 .eggs/
 .venv/
