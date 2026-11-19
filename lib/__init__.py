@@ -30,6 +30,6 @@ TS 插件壳（``dist/index.js``）通过 ``resolve_bridge.py`` 的 JSON-RPC 接
 
 from __future__ import annotations
 
-__version__ = "1.0.0"
+__version__ = "1.0.2"
 __slogan__ = "让青青住进你的dsh"
 __all__ = ["__version__", "__slogan__"]

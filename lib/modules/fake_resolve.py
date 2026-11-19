@@ -648,35 +648,56 @@ class _MediaPool:
             selected = []
             for folder in self._root._walk():
                 selected.extend(folder._clips)
+        # 真实 Resolve 21.2 导出的表头（实测 22 列）——注意里面**没有** Scene/Take/
+        # Camera 这些场记字段，它们只在媒体页把对应列摆出来时才会出现在 CSV 里。
         columns = [
-            "File Name", "Reel Name", "Clip Directory", "Scene", "Shot", "Take",
-            "Camera", "Angle", "Good Take", "Keywords", "Description", "Comments",
-            "People", "Rating", "Duration", "Frames",
+            "File Name", "Clip Directory", "Duration TC", "Shot Frame Rate",
+            "Audio Sample Rate", "Audio Channels", "Resolution", "Video Codec",
+            "Audio Codec", "Start TC", "End TC", "Start Frame", "End Frame",
+            "Frames", "Bit Depth", "Field Dominance", "Data Level",
+            "Audio Bit Depth", "Date Modified", "Input Color Space",
+            "Input Gamma", "Sound Roll #",
         ]
+        # 通过 SetMetadata 写进去的自定义字段：真实机器上是否出现取决于列配置，
+        # 这里以追加列的形式模拟"看得见"的那一半，让 set→export 的回归测得到。
+        extra: list[str] = []
+        for clip in selected or []:
+            for key in (getattr(clip, "_metadata", {}) or {}):
+                if key not in columns and key not in extra:
+                    extra.append(key)
+        columns.extend(sorted(extra))
         rows = []
         for clip in selected or []:
             meta = getattr(clip, "_metadata", {}) or {}
             row = [
                 clip.GetName(),
-                meta.get("Reel Name", clip.GetName()),
                 clip.GetClipProperty("File Path") or "",
-                meta.get("Scene", ""),
-                meta.get("Shot", ""),
-                meta.get("Take", ""),
-                meta.get("Camera #", meta.get("Camera", "")),
-                meta.get("Angle", ""),
-                meta.get("Good Take", ""),
-                meta.get("Keywords", ""),
-                meta.get("Description", ""),
-                meta.get("Comments", ""),
-                meta.get("People", ""),
-                meta.get("Rating", ""),
                 str(clip.GetClipProperty("Duration") or ""),
+                str(clip.GetClipProperty("FPS") or ""),
+                "48000",
+                "2",
+                str(clip.GetClipProperty("Resolution") or ""),
+                str(clip.GetClipProperty("Video Codec") or ""),
+                str(clip.GetClipProperty("Audio Codec") or ""),
+                "00:00:00:00",
+                str(clip.GetClipProperty("Duration") or ""),
+                "0",
                 str(clip.GetClipProperty("Frames") or ""),
+                str(clip.GetClipProperty("Frames") or ""),
+                "10",
+                "Progressive",
+                "Auto",
+                "24",
+                "",
+                "Rec.709 (Scene)",
+                "Rec.709",
+                "",
             ]
+            row.extend(meta.get(key, "") for key in sorted(extra))
             rows.append(",".join(_csv_cell(value) for value in row))
+        # 实测：Windows 上的 Resolve 把这份 CSV 写成 UTF-16 LE + BOM。
         target.write_text(",".join(_csv_cell(c) for c in columns) + "\n" + "\n".join(rows) + "\n",
-                          encoding="utf-8-sig")
+                          encoding="utf-16")
         return True
 
     def MoveClips(self, clips: list[Any], targetFolder: Any) -> bool:

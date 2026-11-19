@@ -106,6 +106,52 @@ def _kind_bin(kind: str) -> str:
     return {"video": "Video", "audio": "Audio", "image": "Stills"}.get(kind, "Other")
 
 
+def _read_csv_report(path: Path) -> dict[str, Any]:
+    """回读 ExportMetadata 写出的 CSV，返回表头与行数。
+
+    Resolve 在 Windows 上把这份 CSV 写成 **UTF-16 LE + BOM**（字节形态是
+    ``\\xff\\xfe`` 开头、每个 ASCII 字符后跟一个 ``\\x00``）。直接按 UTF-8 读会得到
+    ``'\\ufeffF\\x00i\\x00l\\x00e\\x00'`` 这种带空字符的乱码表头——所以这里先按
+    BOM 判编码，再逐级回退，绝不硬编码 utf-8。
+    """
+
+    import csv
+
+    raw = path.read_bytes()
+    if raw.startswith(b"\xff\xfe"):
+        encoding = "utf-16"
+    elif raw.startswith(b"\xfe\xff"):
+        encoding = "utf-16"
+    elif raw.startswith(b"\xef\xbb\xbf"):
+        encoding = "utf-8-sig"
+    else:
+        encoding = "utf-8"
+
+    text: str | None = None
+    for candidate in (encoding, "utf-8", "utf-16", "gbk"):
+        try:
+            text = raw.decode(candidate)
+            encoding = candidate
+            break
+        except (UnicodeDecodeError, LookupError):
+            continue
+    if text is None:
+        text = raw.decode("utf-8", errors="replace")
+        encoding = "utf-8 (replace)"
+
+    text = text.lstrip("\ufeff")
+    rows = list(csv.reader(text.splitlines()))
+    rows = [row for row in rows if any(cell.strip() for cell in row)]
+    header = rows[0] if rows else []
+    return {
+        "encoding": encoding,
+        "columns": [column.strip() for column in header if column.strip()],
+        "row_count": max(len(rows) - 1, 0),
+        "sample": rows[1:3],
+    }
+
+
+
 def register(server: Any) -> None:
     """注册媒体池层工具。"""
 
@@ -463,6 +509,9 @@ def register(server: Any) -> None:
             "把媒体池素材的元数据导出成 CSV（MediaPool.ExportMetadata），并回读表头把**真实字段名**列出来。"
             "Resolve 的元数据字段在不同版本/不同素材类型下不一致（Description 与 Comments 是两个字段、"
             "Camera # 的键名就是 Camera），猜键名常常白写；先导出表头，再照着用 qing_media_set_metadata。"
+            "注意两点：① 列集合取决于媒体页当前摆出的元数据列，实测 21.2 默认 22 列且**不含** Scene/Take，"
+            "想导场记字段得先在媒体页把对应列调出来；② Windows 上这份 CSV 是 UTF-16 LE + BOM，"
+            "用 Excel 打开正常，但用脚本读要按 UTF-16 解码（本工具已回读好表头与样例行）。"
         ),
         side_effect=SideEffect(
             effect="在磁盘上写出一个 CSV（不改素材池里的任何内容）。",
@@ -528,9 +577,13 @@ def register(server: Any) -> None:
         if exported and path.exists():
             payload["size_bytes"] = path.stat().st_size
             try:
-                with path.open("r", encoding="utf-8-sig", errors="replace") as handle:
-                    header = handle.readline().strip()
-                payload["columns"] = [column.strip() for column in header.split(",") if column.strip()]
+                report = _read_csv_report(path)
+                payload["encoding"] = report["encoding"]
+                payload["columns"] = report["columns"]
+                payload["row_count"] = report["row_count"]
+                payload["sample"] = report["sample"]
+                if payload.get("clip_count") is None:
+                    payload["clip_count"] = report["row_count"]
             except OSError as exc:
                 payload["columns_error"] = str(exc)
         elif not exported:

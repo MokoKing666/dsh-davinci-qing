@@ -94,21 +94,28 @@ class _CollectingServer:
 
 
 _TOOL_CACHE: dict[str, dict[str, Any]] | None = None
-_SERVER_CACHE: Any | None = None
+_REGISTRY_CACHE: tuple["_CollectingServer", Any | None] | None = None
 
 
 def _build_registry(use_mcp_sdk: bool = True) -> tuple[_CollectingServer, Any | None]:
-    """注册全部工具，返回 (采集器, 可选的真实 MCP server)。"""
+    """注册全部工具，返回 (采集器, 可选的真实 MCP server)。
 
-    global _SERVER_CACHE
+    整个结果是缓存的。MCP SDK 的 server 对象必须复用（每次新建会丢掉已注册的
+    工具），而往同一个 server 上重复 ``server.tool(...)`` 同名工具又会刷屏
+    ``Tool already exists: ...``。所以首次构建后直接返回缓存，
+    ``list_tools`` 与每次 ``call_tool`` 共用同一份注册。
+    """
+
+    global _REGISTRY_CACHE
+    if use_mcp_sdk and _REGISTRY_CACHE is not None:
+        return _REGISTRY_CACHE
+
     mcp_server = None
     if use_mcp_sdk:
         try:
             from lib.modules.mcp_compat import create_server
 
-            if _SERVER_CACHE is None:
-                _SERVER_CACHE = create_server("dsh-davinci-qing")
-            mcp_server = _SERVER_CACHE
+            mcp_server = create_server("dsh-davinci-qing")
         except Exception:  # noqa: BLE001 - 没装 mcp SDK 时退化
             mcp_server = None
 
@@ -125,6 +132,9 @@ def _build_registry(use_mcp_sdk: bool = True) -> tuple[_CollectingServer, Any | 
     register_timeline(collector)
     register_color(collector)
     register_fusion_deliver(collector)
+
+    if use_mcp_sdk:
+        _REGISTRY_CACHE = (collector, mcp_server)
     return collector, mcp_server
 
 

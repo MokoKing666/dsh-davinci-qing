@@ -1,4 +1,4 @@
-# dsh-davinci-qing 工具目录（v1.0.0）
+# dsh-davinci-qing 工具目录（v1.0.2）
 
 > 让青青住进你的dsh
 
@@ -70,7 +70,7 @@
 
 ### `qing_media_export_metadata` — 导出素材元数据表
 
-把媒体池素材的元数据导出成 CSV（MediaPool.ExportMetadata），并回读表头把**真实字段名**列出来。Resolve 的元数据字段在不同版本/不同素材类型下不一致（Description 与 Comments 是两个字段、Camera # 的键名就是 Camera），猜键名常常白写；先导出表头，再照着用 qing_media_set_metadata。
+把媒体池素材的元数据导出成 CSV（MediaPool.ExportMetadata），并回读表头把**真实字段名**列出来。Resolve 的元数据字段在不同版本/不同素材类型下不一致（Description 与 Comments 是两个字段、Camera # 的键名就是 Camera），猜键名常常白写；先导出表头，再照着用 qing_media_set_metadata。注意两点：① 列集合取决于媒体页当前摆出的元数据列，实测 21.2 默认 22 列且**不含** Scene/Take，想导场记字段得先在媒体页把对应列调出来；② Windows 上这份 CSV 是 UTF-16 LE + BOM，用 Excel 打开正常，但用脚本读要按 UTF-16 解码（本工具已回读好表头与样例行）。
 
 - 【副作用】在磁盘上写出一个 CSV（不改素材池里的任何内容）。
 - 【触发时机】批量写元数据之前先确认字段名；或把场记表交给 Excel 校对时。
