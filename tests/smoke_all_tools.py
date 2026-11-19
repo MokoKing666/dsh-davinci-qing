@@ -46,6 +46,8 @@ KNOWN_ERRORS = {
     "preflight_failed", "api_failure", "unsupported", "no_project", "no_timeline",
     "resolve_not_connected", "resolve_not_installed", "backup_failed",
     "resolve_free_version", "unexpected_error",
+    # 模拟器模式刻意禁用官方 MCP（避免读到真实工程），依赖它的参数会报这个码
+    "official_mcp_unavailable",
 }
 
 CASES: list[tuple[str, dict]] = [
@@ -78,6 +80,8 @@ CASES: list[tuple[str, dict]] = [
     ("qing_timeline_import_srt", {"srt_path": str(SRT)}),
     ("qing_timeline_set_track_state", {"track_type": "video", "track_index": 2, "locked": False}),
     ("qing_color_inspect_nodes", {}),
+    # 官方 MCP 增强项：模拟器模式下刻意禁用，此处应正常返回 ok（grade_detail.available=false）
+    ("qing_color_inspect_nodes", {"include_grade_detail": True}),
     ("qing_color_label_nodes", {"node_index": 1, "label": "BALANCE", "color": "Orange"}),
     # 用 label 定位，覆盖「删节点后序号会重排」的稳定寻址路径
     ("qing_color_set_lut", {"lut_path": str(CUBE), "node_label": "BALANCE"}),
@@ -86,6 +90,8 @@ CASES: list[tuple[str, dict]] = [
     ("qing_color_copy_grade", {"whole_timeline": True}),
     ("qing_color_apply_drx", {"drx_path": str(DRX), "scope": "whole_timeline"}),
     ("qing_color_grab_frame", {"tag": "smoke"}),
+    # grid_count>0 走官方 MCP；模拟器下禁用，预期 official_mcp_unavailable
+    ("qing_color_grab_frame", {"tag": "smoke_grid", "grid_count": 4}),
     ("qing_fusion_inspect", {}),
     ("qing_fusion_add_tool", {"tool_type": "TextPlus", "inputs": [{"name": "StyledText", "value": "青青"}]}),
     ("qing_fusion_set_input", {"tool_name": "TextPlus1", "inputs": [{"name": "Size", "value": 0.07}]}),

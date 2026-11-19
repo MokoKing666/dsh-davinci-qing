@@ -34,7 +34,7 @@
 
 ### `qing_resolve_health` — Resolve 环境自检 🔍
 
-环境自检：定位脚本 API 与 fusionscript 动态库、连接 Resolve、确认 Studio 版、检查是否有打开的工程与活动时间线，并给出中文排查提示。
+环境自检：定位脚本 API 与 fusionscript 动态库、连接 Resolve、确认 Studio 版、检查是否有打开的工程与活动时间线，并给出中文排查提示。同时报告官方 Resolve MCP（21.1+ 自带）是否可用——它补的是脚本 API 读不到的「调色参数实际取值」与「整条时间线缩略图网格」。
 
 - 【副作用】只读。仅当显式传 page 参数时会把界面切到该页面（不改动工程内容）。
 - 【触发时机】会话开始时、连接失败后、或任何工具报 resolve_not_connected 之后先调用一次。
@@ -496,10 +496,12 @@
 | `also_grab_selected` | boolean | 否 | 为 true 时额外导出时间线上前 N 个片段的首帧对比图。（默认 false） |
 | `compare_count` | integer | 否 | also_grab_selected 时导出多少个片段。（默认 3） |
 | `timeline_name` | string | 否 | 时间线名称；留空为当前时间线。 |
+| `grid_count` | integer | 否 | 大于 0 时改为返回一张**缩略图网格**（一次覆盖整条时间线的 N 个等距帧，1–48），走官方 Resolve MCP 的 get_thumbnails。比逐帧导静帧快一个数量级，适合「这条时间线整体什么调性」这类问题；需要 Resolve 21.1+ 的官方 MCP。（默认 0） |
+| `grid_max_dimension` | integer | 否 | grid_count 生效时整张网格图的长边像素上限。（默认 1568） |
 
 ### `qing_color_inspect_nodes` — 解析片段节点树 🔍
 
-读取片段（或整条时间线）的调色节点树：节点数量、标签与色标、启用状态、挂载的 LUT、节点内改过的工具组。可批量覆盖多条片段，便于判断调色是否统一。返回的 index 是 1 基序号，**删节点后会整体重排**；要长期引用某个节点请用 label。
+读取片段（或整条时间线）的调色节点树：节点数量、标签与色标、启用状态、挂载的 LUT、节点内改过的工具组。可批量覆盖多条片段，便于判断调色是否统一。返回的 index 是 1 基序号，**删节点后会整体重排**；要长期引用某个节点请用 label。传 include_grade_detail=true 时会额外读取官方 Resolve MCP 的 describe_grade，拿到脚本 API 读不到的东西：每个节点里参数**实际偏离默认值多少**、以及调过色节点的 ASC CDL 等效值（需 Resolve 21.1+ 且装了官方 MCP，否则该项会被跳过并说明原因）。
 
 - 【副作用】只读（唯一例外：某些版本读取节点 LUT 会触发一次 LUT 列表刷新）。
 - 【触发时机】接手一镜调色、检查批量套用结果、或决定要挂 LUT 到第几个节点之前。
@@ -511,6 +513,8 @@
 | `timeline_name` | string | 否 | 时间线名称；留空为当前时间线。 |
 | `whole_timeline` | boolean | 否 | 为 true 时返回时间线上每个视频片段的节点摘要（用于检查调色一致性）。（默认 false） |
 | `max_clips` | integer | 否 | whole_timeline 时最多检查多少个片段。（默认 30） |
+| `include_grade_detail` | boolean | 否 | 为 true 时额外调用官方 MCP 的 describe_grade，返回参数实际取值与 ASC CDL 等效值。仅对单个片段（whole_timeline=false）生效；需要 Resolve 21.1+ 的官方 MCP。（默认 false） |
+| `grade_source` | enum | 否 | describe_grade 读取哪一层节点图：片段级 / 时间线级 / 照片页。（默认 'timeline_item'） |
 
 ### `qing_color_label_nodes` — 给节点命名/上色 💾
 

@@ -10,7 +10,7 @@ metadata:
 user-invocable: true
 ---
 
-# DaVinci Resolve 青青桥接（davinci-qing）
+# 快乐青青（davinci-qing）
 
 **让青青住进你的dsh。** 本技能把 DeepSeek Harness 接到 DaVinci Resolve Studio（v18.5 / v19 / v20 / v21+）。
 
@@ -79,6 +79,17 @@ qing_color_grab_frame(tag="after_tweak")                    # 再取一张对比
 **取回的图是显示参考，不是示波器**：它是 8 位 PNG，没有 IRE / 0–1023 刻度，
 不要报"高光溢出 12%""黑位到 1023"这类数值。要判断过冲，请用户在 Resolve 里开
 波形图（并打开 Extents，否则过冲被截掉看不到）——截图上只能给方向性结论。
+
+**官方 MCP 增强（Resolve Studio 21.1+ 装了才有，缺了会自动降级）**：
+
+| 想要 | 加这个参数 | 拿到什么 |
+| --- | --- | --- |
+| 一眼看完整条时间线的调性 | `qing_color_grab_frame(grid_count=12)` | 一张 N 格缩略图（带时间码标注），替代逐帧导出 |
+| 看色彩管理实际取值 / 节点真调过色后的 CDL | `qing_color_inspect_nodes(include_grade_detail=True)` | `color_management` 全字段 + 节点工具组 + 有 CDL 时给 ASC CDL 等效值 |
+
+这两项**失败不会让主流程失败**：`grade_detail.available=false` 或
+`official_mcp_unavailable` 只说明官方 MCP 不可用（版本低于 21.1、没装 Studio、
+或正在模拟器模式），基础能力照常。`qing_resolve_health` 会报告官方 MCP 是否可用。
 
 ### 3. 标记与字幕
 
@@ -154,6 +165,7 @@ qing_timeline_export("D:/cut.aaf", export_type="aaf")       # 交给别的剪辑
 | `node_label_not_found` | 该片段上没有这个标签的节点；先 `qing_color_inspect_nodes` 看现有标签（注意每个片段的节点树可能不同） |
 | `output_exists` | 目标目录已有同名渲染结果；换文件名或把 `on_existing` 设成 `"unique"` |
 | `backup_failed` | 备份建不出来（协作锁定/只读）。修好后重试；**不要**默认开 `allow_without_backup` |
+| `official_mcp_unavailable` | 官方 MCP 不可用（需要 Resolve Studio 21.1+、且不在模拟器模式）。去掉 `include_grade_detail` / `grid_count` 用基础能力即可 |
 | `unsupported` | 当前版本没有该 API（v19 以下没有 `GetNodeGraph`），按 `hint` 里的替代方案做 |
 | `api_failure` | 参数被 Resolve 拒绝；先 `qing_*_inspect` 读实际状态再改 |
 | `bridge_failure` | Python 桥断了；调一次 `qing_resolve_health`，仍失败就重启 DSH 让插件重拉 Python |
@@ -167,5 +179,7 @@ qing_timeline_export("D:/cut.aaf", export_type="aaf")       # 交给别的剪辑
   没有"只改某一个参数"的接口。覆盖率有风险时先复制一份时间线再动手。
 - 脚本 API **没有**限定器/窗口/跟踪的接口，也没有 Fusion 连线接口——这类操作只能
   让用户在 Resolve 界面里完成，别假装能做。
+- 官方 MCP（Resolve 21.1+）只借用 `describe_grade` / `get_thumbnails` / `get_image` 三项；
+  `run_script` / `run_script_unsafe` **刻意不接**——它们能执行任意代码，会绕过四重护栏。
 - 详细参数表见 `docs/TOOLS.md`；同源 JSON Schema 见 `docs/tool-schemas.json`。
 - 手册依据（页码对应《DaVinci Resolve 21.1 Reference Manual》）见 `docs/manual-notes/`。

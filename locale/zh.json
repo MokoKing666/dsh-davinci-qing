@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "DaVinci Resolve 青青桥接",
-    "description": "把 DeepSeek Harness 连到 DaVinci Resolve Studio：36 个工具覆盖环境自检、媒体归档、时间线剪辑、调色节点与 LUT/DRX、Fusion 合成、Deliver 渲染队列。批量写入前自动保存工程并复制备份时间线。",
+    "title": "快乐青青",
+    "description": "把 DeepSeek Harness 连到 DaVinci Resolve Studio：43 个工具覆盖环境自检、媒体归档、时间线剪辑、调色节点与 LUT/DRX、Fusion 合成、Deliver 渲染队列。批量写入前自动保存工程并复制备份时间线。",
     "detail": "docs/DETAIL.md"
   },
   "config": {
@@ -38,6 +38,7 @@
     "qing_media_set_metadata": "批量写素材元数据",
     "qing_media_search": "在媒体池里搜索素材",
     "qing_media_markers_to_subclips": "按标记生成子剪辑",
+    "qing_media_export_metadata": "导出元数据 CSV 拿真实列名",
     "qing_timeline_inspect": "读取时间线结构",
     "qing_timeline_create": "新建时间线",
     "qing_timeline_add_clips": "向轨道追加/插入片段",
@@ -45,10 +46,14 @@
     "qing_timeline_set_clip_properties": "批量修改片段属性",
     "qing_timeline_add_markers": "批量添加彩色标记",
     "qing_timeline_read_markers": "读取时间线标记",
+    "qing_timeline_delete_markers": "按颜色/帧号/自定义数据删除标记",
+    "qing_timeline_mark_inout": "读取/设置/清除入出点",
     "qing_timeline_import_srt": "导入 SRT 字幕",
     "qing_timeline_set_track_state": "设置轨道锁定/启用",
     "qing_timeline_delete_clips": "批量删除时间线片段",
+    "qing_timeline_export": "导出交换格式（AAF/EDL/FCPXML/OTIO…）",
     "qing_color_inspect_nodes": "解析片段节点树",
+    "qing_color_label_nodes": "给节点打标签与色标",
     "qing_color_set_lut": "在节点上挂载 3D LUT",
     "qing_color_set_node_enabled": "启用/旁通节点",
     "qing_color_copy_grade": "批量复制调色",
@@ -57,8 +62,10 @@
     "qing_fusion_inspect": "查看片段 Fusion 合成",
     "qing_fusion_add_tool": "添加 Fusion 节点",
     "qing_fusion_set_input": "修改 Fusion 节点属性",
+    "qing_deliver_formats": "列出可用渲染格式与编码",
     "qing_deliver_list_presets": "列出交付渲染预设",
     "qing_deliver_setup_job": "配置并添加渲染任务",
+    "qing_deliver_render_settings": "直写底层渲染参数",
     "qing_deliver_queue_status": "查询交付队列状态",
     "qing_deliver_start": "开始渲染",
     "qing_deliver_stop": "停止渲染",

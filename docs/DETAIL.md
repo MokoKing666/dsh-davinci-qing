@@ -1,6 +1,6 @@
 ![DSH 通过 MCP 桥接驱动 DaVinci Resolve 的剪辑、调色与交付](preview.svg)
 
-# DaVinci Resolve 青青桥接
+# 快乐青青
 
 **让青青住进你的dsh** —— 把 DeepSeek Harness 与 DaVinci Resolve Studio（v19 / v20 / v21+）连成一条自然语言驱动的剪辑、调色、合成与交付流水线。
 
@@ -54,6 +54,12 @@
 - **Fusion 连线无法用脚本完成**：`AddTool` 新建的节点默认未连线，未连线不参与输出；工具会在返回值里标明 `connected_to_output`。
 - **SRT 字幕**优先走 `Timeline.ImportIntoTimeline`（v18.5+）；不支持时退化为 Fusion 文本片段（放在视频轨上，不是可编辑字幕条目），结果里会明确标出 `method`。
 - **截图不是示波器**：`qing_color_grab_frame` 返回的是 8 位显示参考图，附带的像素统计只用于方向性判断，不能当 IRE / 0–1023 读数。
+- **官方 MCP 增强是可选项**：`qing_color_inspect_nodes(include_grade_detail=true)` 与
+  `qing_color_grab_frame(grid_count=N)` 借用 Resolve Studio 21.1+ 随附的官方 MCP
+  （`ResolveMCP.exe`），补齐脚本 API 结构上拿不到的两件事：色彩管理实际取值 / 调过色节点的
+  ASC CDL 等效值，以及一次覆盖整条时间线的缩略图网格。它不可用时（版本不够、非 Studio、
+  或正在模拟器模式）只让**该项增强**跳过并说明原因，基础能力不受影响。
+  `run_script` / `run_script_unsafe` 刻意不接——它们能执行任意代码，会绕过四重护栏。
 - Resolve 没有"撤销栈"可供脚本回滚，所以回滚手段只有备份时间线。
 - `ExportCurrentFrameAsStill` 需要界面停在调色页且有播放头所在片段，否则返回空文件；工具会自动切页仍失败时会给出排查提示。
 
@@ -61,7 +67,7 @@
 
 - `dist/` 与 `src/` —— Cordis 插件壳（`src/index.ts` 注册工具、托管 Python 子进程）
 - `lib/resolve_bridge.py` —— 常驻 JSON-RPC 桥；`lib/server.py` —— 独立 MCP 服务端
-- `lib/modules/` —— 业务模块（`resolve_connector.py`、`safety_guard.py`、`media_pool_tools.py`、`timeline_tools.py`、`color_tools.py`、`fusion_deliver_tools.py`、`fake_resolve.py` 等）
+- `lib/modules/` —— 业务模块（`resolve_connector.py`、`safety_guard.py`、`media_pool_tools.py`、`timeline_tools.py`、`color_tools.py`、`fusion_deliver_tools.py`、`official_mcp.py`、`fake_resolve.py` 等）
 - `docs/TOOLS.md` —— 43 个工具的参数表与副作用说明（由 `export_schema.py` 生成）
 - `docs/tool-schemas.json` —— 同源的 JSON Schema
 - `docs/manual-notes/` —— 按《DaVinci Resolve 21.1 Reference Manual》整理的知识笔记（带页码）

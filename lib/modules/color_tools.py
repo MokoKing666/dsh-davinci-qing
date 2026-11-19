@@ -17,13 +17,14 @@
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 from typing import Any, Annotated, Literal
 
 from pydantic import BaseModel, Field
 
-from .errors import ApiFailureError, UnsupportedError
+from .errors import ApiFailureError, OfficialMcpUnavailableError, UnsupportedError
 from .safety_guard import (
     Preflight,
     record_mutation,
@@ -297,6 +298,9 @@ def register(server: Any) -> None:
             "读取片段（或整条时间线）的调色节点树：节点数量、标签与色标、启用状态、挂载的 LUT、"
             "节点内改过的工具组。可批量覆盖多条片段，便于判断调色是否统一。"
             "返回的 index 是 1 基序号，**删节点后会整体重排**；要长期引用某个节点请用 label。"
+            "传 include_grade_detail=true 时会额外读取官方 Resolve MCP 的 describe_grade，"
+            "拿到脚本 API 读不到的东西：每个节点里参数**实际偏离默认值多少**、以及调过色节点的 "
+            "ASC CDL 等效值（需 Resolve 21.1+ 且装了官方 MCP，否则该项会被跳过并说明原因）。"
         ),
         side_effect=SideEffect(
             effect="只读（唯一例外：某些版本读取节点 LUT 会触发一次 LUT 列表刷新）。",
@@ -316,6 +320,19 @@ def register(server: Any) -> None:
             bool, Field(description="为 true 时返回时间线上每个视频片段的节点摘要（用于检查调色一致性）。")
         ] = False,
         max_clips: Annotated[int, Field(description="whole_timeline 时最多检查多少个片段。", ge=1, le=200)] = 30,
+        include_grade_detail: Annotated[
+            bool,
+            Field(
+                description=(
+                    "为 true 时额外调用官方 MCP 的 describe_grade，返回参数实际取值与 ASC CDL 等效值。"
+                    "仅对单个片段（whole_timeline=false）生效；需要 Resolve 21.1+ 的官方 MCP。"
+                )
+            ),
+        ] = False,
+        grade_source: Annotated[
+            Literal["timeline_item", "timeline", "photo"],
+            Field(description="describe_grade 读取哪一层节点图：片段级 / 时间线级 / 照片页。"),
+        ] = "timeline_item",
     ) -> dict[str, Any]:
         """解析节点树。"""
 
@@ -352,17 +369,24 @@ def register(server: Any) -> None:
         item = _clip_target(timeline, item_index=item_index, track_index=track_index)
         graph = _graph_for(item)
         count = int(_safe_call(graph.GetNumNodes) or 0)
-        return ok(
-            {
-                "timeline_name": _safe_call(timeline.GetName),
-                "clip": {
-                    **item_summary(item, track_type="video", track_index=track_index),
-                    "timecode": frames_to_timecode(int(_safe_call(item.GetStart) or 0), fps),
-                },
-                "node_count": count,
-                "nodes": [_node_info(graph, i).model_dump() for i in range(1, count + 1)],
-            }
-        )
+        payload: dict[str, Any] = {
+            "timeline_name": _safe_call(timeline.GetName),
+            "clip": {
+                **item_summary(item, track_type="video", track_index=track_index),
+                "timecode": frames_to_timecode(int(_safe_call(item.GetStart) or 0), fps),
+            },
+            "node_count": count,
+            "nodes": [_node_info(graph, i).model_dump() for i in range(1, count + 1)],
+        }
+
+        if include_grade_detail:
+            payload["grade_detail"] = _grade_detail(
+                source=grade_source,
+                timecode=_safe_call(timeline.GetCurrentTimecode),
+                track=track_index if grade_source == "timeline_item" else None,
+            )
+
+        return ok(payload)
 
     @qing_tool(
         server,
@@ -978,8 +1002,32 @@ def register(server: Any) -> None:
         ] = False,
         compare_count: Annotated[int, Field(description="also_grab_selected 时导出多少个片段。", ge=1, le=10)] = 3,
         timeline_name: Annotated[str | None, Field(description="时间线名称；留空为当前时间线。")] = None,
+        grid_count: Annotated[
+            int,
+            Field(
+                description=(
+                    "大于 0 时改为返回一张**缩略图网格**（一次覆盖整条时间线的 N 个等距帧，1–48），"
+                    "走官方 Resolve MCP 的 get_thumbnails。比逐帧导静帧快一个数量级，"
+                    "适合「这条时间线整体什么调性」这类问题；需要 Resolve 21.1+ 的官方 MCP。"
+                ),
+                ge=0,
+                le=48,
+            ),
+        ] = 0,
+        grid_max_dimension: Annotated[
+            int, Field(description="grid_count 生效时整张网格图的长边像素上限。", ge=256, le=4096)
+        ] = 1568,
     ) -> Any:
-        """导出当前帧。"""
+        """导出当前帧（或整条时间线的缩略图网格）。"""
+
+        if grid_count > 0:
+            return _grab_thumbnail_grid(
+                count=grid_count,
+                max_dimension=grid_max_dimension,
+                tag=tag,
+                out_dir=out_dir,
+                timeline_name=timeline_name,
+            )
 
         sess = session()
         project = sess.project()
@@ -1060,6 +1108,114 @@ def register(server: Any) -> None:
             image = Image(data=path.read_bytes(), format=file_format)
 
         return [image, summary]
+
+
+def _grade_detail(*, source: str, timecode: str | None, track: int | None) -> dict[str, Any]:
+    """经官方 MCP 读取调色的实际内容（参数偏离值 + ASC CDL 等效值）。
+
+    脚本 API 只能读到"这个节点挂了哪个 LUT / 有哪些工具组"，读不到参数的具体数值；
+    这一项补的正是那个缺口。官方 MCP 不在时**不报错**，返回一条带原因的空结果——
+    调用方本来就是"能拿到就更好"，不该因为缺一个可选增强而整个调用失败。
+    """
+
+    try:
+        from . import official_mcp
+    except ImportError as exc:  # pragma: no cover - 模块随包发布，正常不会缺
+        return {"available": False, "reason": f"official_mcp 模块不可用：{exc}"}
+
+    arguments: dict[str, Any] = {"source": source}
+    if source == "timeline_item":
+        if timecode:
+            arguments["timecode"] = timecode
+        if track is not None:
+            arguments["track"] = track
+
+    try:
+        detail = official_mcp.describe_grade(**arguments)
+    except OfficialMcpUnavailableError as exc:
+        return {"available": False, "reason": exc.message, "hint": exc.hint}
+    except Exception as exc:  # noqa: BLE001 - 增强项失败不该拖垮主流程
+        return {"available": False, "reason": f"{exc.__class__.__name__}: {exc}"}
+
+    return {
+        "available": True,
+        "source": "official_mcp/describe_grade",
+        "grade": detail,
+        "reading_hint": (
+            "nodes[].tools 里列出的是「被改离默认值的参数组」，没列出的节点等于没动过。"
+            "color_management 决定这个节点收到的图像数据是什么色彩空间——挂 LUT 前先看它，"
+            "否则 Log 素材可能被当成 Rec.709 处理。只有**确实调过色**的节点才会带 CDL 等效值。"
+        ),
+    }
+
+
+def _grab_thumbnail_grid(
+    *,
+    count: int,
+    max_dimension: int,
+    tag: str,
+    out_dir: str | None,
+    timeline_name: str | None,
+) -> Any:
+    """经官方 MCP 取一张缩略图网格（一次覆盖整条时间线的 N 个等距帧）。
+
+    脚本 API 没有"批量取缩略图"这种接口，只能一帧一帧 ``ExportCurrentFrameAsStill``
+    再把图片拼起来；官方 MCP 的 ``get_thumbnails`` 直接返回拼好的网格图，
+    而且**不移动播放头**。
+    """
+
+    import base64
+
+    from .mcp_compat import Image
+
+    try:
+        from . import official_mcp
+    except ImportError as exc:  # pragma: no cover
+        raise OfficialMcpUnavailableError(f"official_mcp 模块不可用：{exc}") from exc
+
+    result = official_mcp.get_thumbnails(
+        source="timeline",
+        count=count,
+        max_dimension=max_dimension,
+    )
+
+    images = result.get("images") or []
+    if not images:
+        raise ApiFailureError(
+            "官方 MCP 的 get_thumbnails 没有返回图像。",
+            hint="确认时间线上有片段、播放头位置有效；也可以改用 grid_count=0 走单帧导出。",
+            detail={"text": (result.get("text") or "")[:400]},
+        )
+
+    image_block = images[0]
+    raw = base64.b64decode(image_block.get("data") or "")
+
+    target_dir = Path(out_dir).expanduser() if out_dir else temp_dir()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    suffix = "jpg" if "jpeg" in (image_block.get("mime_type") or "") else "png"
+    path = target_dir / f"{tag}_grid_{timestamp_slug()}.{suffix}".replace(" ", "_")
+    path.write_bytes(raw)
+
+    header = result.get("text") or ""
+    payload: dict[str, Any] = {
+        "ok": True,
+        "mode": "thumbnail_grid",
+        "file_path": str(path),
+        "size_bytes": len(raw),
+        "grid_header": header,
+        "timeline_name": timeline_name,
+        "measured_from_export": _frame_stats(path),
+        "measurement_caveat": (
+            "这是官方 MCP 渲染的**网格缩略图**：已套用调色与色彩管理，但**不含显示 LUT**，"
+            "每格还被缩放到了很小尺寸。它适合判断「整条时间线的调性是否统一」，"
+            "不适合判断某一帧的高光细节——要看单帧请用 grid_count=0。"
+        ),
+        "reading_hint": (
+            "网格按时间顺序从左到右、从上到下排列，格子上有标注（时间码或片段内帧偏移）。"
+            "先扫一遍找「明显跳出来」的那几格，再用 grid_count=0 单独抓那一帧细看。"
+        ),
+    }
+    return [Image(data=raw, format=suffix), json.dumps(payload, ensure_ascii=False, indent=2)]
 
 
 def _frame_stats(path: Path) -> dict[str, Any] | None:

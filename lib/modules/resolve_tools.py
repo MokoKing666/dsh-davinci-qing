@@ -26,6 +26,8 @@ from .tools_common import (
 _HEALTH_SUMMARY = (
     "环境自检：定位脚本 API 与 fusionscript 动态库、连接 Resolve、确认 Studio 版、"
     "检查是否有打开的工程与活动时间线，并给出中文排查提示。"
+    "同时报告官方 Resolve MCP（21.1+ 自带）是否可用——它补的是脚本 API 读不到的"
+    "「调色参数实际取值」与「整条时间线缩略图网格」。"
 )
 _HEALTH_SIDE = SideEffect(
     effect="只读。仅当显式传 page 参数时会把界面切到该页面（不改动工程内容）。",
@@ -70,6 +72,7 @@ def register(server: Any) -> None:
                 payload["page_switch"] = {"ok": False, "message": str(exc)}
 
         payload["scripting_preference_offline_guess"] = detect_external_scripting_preference()
+        payload["official_mcp"] = _official_mcp_status()
         return ok(payload)
 
     @qing_tool(
@@ -212,6 +215,32 @@ def _safe(fn: Any, default: Any = None) -> Any:
         return fn()
     except Exception:  # noqa: BLE001
         return default
+
+
+def _official_mcp_status() -> dict[str, Any]:
+    """报告官方 Resolve MCP 的可用性（只定位文件，不启动子进程）。
+
+    自检里**刻意不真的去握手**：自检应当快且无副作用，而握手要起一个子进程。
+    想知道它能不能跑，看这里的 ``available`` 就够；真跑失败时
+    ``include_grade_detail`` / ``grid_count`` 会各自给出原因。
+    """
+
+    try:
+        from . import official_mcp
+    except ImportError as exc:  # pragma: no cover
+        return {"available": False, "reason": f"official_mcp 模块不可用：{exc}"}
+
+    status = official_mcp.availability()
+    status["unlocks"] = [
+        "qing_color_inspect_nodes(include_grade_detail=true) —— 读参数实际取值与 ASC CDL 等效值",
+        "qing_color_grab_frame(grid_count=N) —— 一次拿到整条时间线的缩略图网格",
+    ]
+    if not status.get("available"):
+        status["hint"] = (
+            "官方 MCP 随 DaVinci Resolve 21.1+ 提供；找不到时上述两项增强会被自动跳过，"
+            "其余工具不受影响。若装在非默认路径，设置环境变量 RESOLVE_MCP_PATH 指向 ResolveMCP(.exe)。"
+        )
+    return status
 
 
 __all__ = ["register"]

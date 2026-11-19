@@ -2,12 +2,12 @@
 #
 # Note: the DSH loader reads `locale/*.json` (en.json shares this content).
 # This YAML file mirrors it for human review and external tooling;
-# `npm run check:locale` verifies the two stay identical.
+# `scripts/check-spec.mjs` verifies the two stay identical.
 
 meta:
-  title: DaVinci Resolve bridge
+  title: Happy Qingqing
   description: >-
-    Connects DeepSeek Harness to DaVinci Resolve Studio: 36 tools for environment
+    Connects DeepSeek Harness to DaVinci Resolve Studio: 43 tools for environment
     checks, media archiving, timeline editing, color nodes with LUT/DRX, Fusion
     comps, and the Deliver queue. Bulk writes save the project and duplicate the
     timeline first.
@@ -16,19 +16,19 @@ meta:
 config:
   pythonPath:
     label: Python interpreter
-    description: Leave empty to auto-detect (.venv, then python, then python3). Set an absolute python.exe path when needed.
+    description: Leave empty to auto-detect (.venv → python → python3). Set the absolute path to python.exe if needed.
   toolTimeoutMs:
     label: Tool timeout (ms)
-    description: Longest wait for one Resolve operation. Render jobs should stay at three minutes or more.
+    description: Longest wait for a single Resolve operation. Keep render-heavy work above three minutes.
   startupTimeoutMs:
     label: Bridge startup timeout (ms)
-    description: How long to wait for the Python bridge on first start; the first dependency import is slower.
+    description: How long to wait for the Python bridge to boot; the first import is slower.
   failOnStartupError:
     label: Block plugin load when the bridge fails
-    description: When off, a failed bridge only means no tools, and never delays DSH startup.
+    description: When off, a dead bridge only means no tools and never stalls DSH startup.
   enabled:
-    label: Enable plugin
-    description: Turning this off removes every tool immediately while the plugin stays installed.
+    label: Enable the plugin
+    description: Turning this off hides every tool immediately while the plugin stays installed.
 
 tools:
   qing_resolve_health: Resolve environment self-check
@@ -42,6 +42,7 @@ tools:
   qing_media_set_metadata: Write clip metadata in bulk
   qing_media_search: Search the media pool
   qing_media_markers_to_subclips: Turn markers into subclips
+  qing_media_export_metadata: Export metadata CSV to learn the real column names
   qing_timeline_inspect: Read the timeline structure
   qing_timeline_create: Create a timeline
   qing_timeline_add_clips: Append or insert clips
@@ -49,10 +50,14 @@ tools:
   qing_timeline_set_clip_properties: Rewrite clip properties in bulk
   qing_timeline_add_markers: Add colored markers in bulk
   qing_timeline_read_markers: Read timeline markers
+  qing_timeline_delete_markers: Delete markers by color, frame or custom data
+  qing_timeline_mark_inout: Read, set or clear mark in and out
   qing_timeline_import_srt: Import an SRT subtitle track
   qing_timeline_set_track_state: Lock or enable a track
   qing_timeline_delete_clips: Delete timeline clips in bulk
+  qing_timeline_export: Export an interchange format (AAF/EDL/FCPXML/OTIO…)
   qing_color_inspect_nodes: Inspect the node graph
+  qing_color_label_nodes: Label nodes and set their color
   qing_color_set_lut: Apply a 3D LUT to a node
   qing_color_set_node_enabled: Enable or bypass a node
   qing_color_copy_grade: Copy a grade across clips
@@ -61,8 +66,10 @@ tools:
   qing_fusion_inspect: Inspect a Fusion comp
   qing_fusion_add_tool: Add a Fusion node
   qing_fusion_set_input: Change a Fusion node input
+  qing_deliver_formats: List render formats and codecs
   qing_deliver_list_presets: List render presets
   qing_deliver_setup_job: Configure and queue a render job
+  qing_deliver_render_settings: Write raw render settings
   qing_deliver_queue_status: Read the render queue
   qing_deliver_start: Start rendering
   qing_deliver_stop: Stop rendering

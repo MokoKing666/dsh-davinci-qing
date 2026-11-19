@@ -201,6 +201,56 @@ def audit_guard() -> list[str]:
     return problems
 
 
+def audit_official_mcp() -> list[str]:
+    """验证官方 MCP 增强层的两条铁律：三平台可定位 + 模拟器绝不外联。"""
+
+    problems: list[str] = []
+    from lib.modules import official_mcp as om
+
+    # 1) 三平台定位函数都必须存在且给出候选
+    for fn_name in ("_windows_candidates", "_darwin_candidates", "_linux_candidates"):
+        fn = getattr(om, fn_name, None)
+        if fn is None:
+            problems.append(f"官方 MCP：缺少 {fn_name}()")
+            continue
+        try:
+            candidates = fn()
+        except Exception as exc:  # noqa: BLE001
+            problems.append(f"官方 MCP：{fn_name}() 抛异常 → {exc}")
+            continue
+        if not candidates:
+            problems.append(f"官方 MCP：{fn_name}() 返回空候选")
+
+    # 2) 模拟器模式必须完全隔离——这是安全红线，不是可选项
+    import os
+
+    original = os.environ.get("QING_DAVINCI_FAKE")
+    try:
+        os.environ["QING_DAVINCI_FAKE"] = "1"
+        om._LOCATE_CACHE.clear()
+        if om.find_resolve_mcp() is not None:
+            problems.append("官方 MCP：模拟器模式下仍定位到了真实 ResolveMCP.exe（安全红线）")
+        status = om.availability()
+        if status.get("available"):
+            problems.append("官方 MCP：模拟器模式下 availability() 仍报告可用（安全红线）")
+        try:
+            om.describe_grade()
+        except om.OfficialMcpUnavailableError:
+            pass
+        except Exception as exc:  # noqa: BLE001
+            problems.append(f"官方 MCP：模拟器模式下抛了非预期异常 → {type(exc).__name__}")
+        else:
+            problems.append("官方 MCP：模拟器模式下 describe_grade() 居然成功返回（安全红线）")
+    finally:
+        if original is None:
+            os.environ.pop("QING_DAVINCI_FAKE", None)
+        else:
+            os.environ["QING_DAVINCI_FAKE"] = original
+        om._LOCATE_CACHE.clear()
+
+    return problems
+
+
 def audit_cross_platform() -> list[str]:
     """验证三平台路径探测逻辑都存在且能返回候选。"""
 
@@ -291,6 +341,16 @@ def main() -> int:
     else:
         print("   ✓ 检查点生成 [Backup_HHMMSS]_ 备份时间线")
         print("   ✓ Pre-flight 拦下越界轨道与锁定轨道")
+
+    print("\n[6] 官方 MCP 增强层")
+    official_problems = audit_official_mcp()
+    if official_problems:
+        failures.extend(official_problems)
+        for problem in official_problems:
+            print(f"   ✗ {problem}")
+    else:
+        print("   ✓ 三平台均可定位 ResolveMCP 可执行文件")
+        print("   ✓ 模拟器模式完全隔离，绝不外联真实 Resolve")
 
     print("\n" + "=" * 60)
     if failures:

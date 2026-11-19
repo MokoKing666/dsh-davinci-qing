@@ -104,6 +104,18 @@ class UnsupportedError(QingError):
     default_hint = "该能力需要更新的 Resolve 版本（v19/v20/v21+）或 Studio 授权；请升级后重试。"
 
 
+class OfficialMcpUnavailableError(QingError):
+    """官方 DaVinci Resolve MCP 不可用（未安装 / 版本低于 21.1 / 二进制缺失）。"""
+
+    code = "official_mcp_unavailable"
+    default_hint = (
+        "该能力依赖 DaVinci Resolve 21.1+ 自带的官方 MCP（ResolveMCP）。"
+        "1) 确认已安装 Resolve Studio 21.1 或更新版本；"
+        "2) 若装在非默认路径，设置环境变量 RESOLVE_MCP_PATH 指向 ResolveMCP(.exe)；"
+        "3) 也可以不带这个参数，改用脚本 API 的基础能力。"
+    )
+
+
 class BackupFailedError(QingError):
     """安全检查点（保存工程 + 复制时间线）失败。"""
 
@@ -124,5 +136,6 @@ __all__ = [
     "PreflightError",
     "ApiFailureError",
     "UnsupportedError",
+    "OfficialMcpUnavailableError",
     "BackupFailedError",
 ]
