@@ -1,6 +1,6 @@
 {
   "name": "dsh-davinci-qing",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "让青青住进你的dsh —— 连接 DeepSeek Harness 与 DaVinci Resolve Studio 的全流程工作流自动化桥梁，从媒体池归档、时间线粗剪到节点树调色与视觉审片，让创作者把时间留给创作。",
   "license": "MIT",
   "type": "module",
