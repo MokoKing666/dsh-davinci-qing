@@ -43,6 +43,16 @@ export interface Config {
 /** 配置默认值。 */
 export declare const CONFIG_DEFAULTS: Required<Pick<Config, 'toolTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'enabled'>>;
 /**
+ * 统一的输出 schema：结构化结果本身就是 JSON。
+ *
+ * 注意 `detail` 故意不写 `type`：它的形状随工具而变（对象、数组或标量都可能），
+ * 写成空 schema 表示「不约束」。千万不要写成 `type: 'json'` —— `json` 不是
+ * JSON Schema 的合法类型，DSH 加载插件时会直接拒绝：
+ * `unsupported JSON schema: schema.properties.detail.type must be one of
+ * object/array/string/number/integer/boolean/null`。
+ */
+export declare const OUTPUT_SCHEMA: Record<string, unknown>;
+/**
  * 注册全部达芬奇工具。
  *
  * @param ctx Cordis 上下文（需要 `tools`）。

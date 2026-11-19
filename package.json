@@ -62,6 +62,7 @@
     "check:python": "python -m compileall -q lib",
     "check:spec": "node scripts/check-spec.mjs",
     "check:manifest": "python scripts/check_manifest.py",
+    "check:schema": "python scripts/check_schema.py",
     "check:env": "python lib/check_env.py",
     "bridge:list": "python lib/resolve_bridge.py --list",
     "bridge:health": "python lib/resolve_bridge.py --health",
@@ -69,7 +70,7 @@
     "test:smoke": "python tests/smoke_all_tools.py",
     "test:shell": "node tests/verify_ts_shell.mjs",
     "schema": "python export_schema.py",
-    "verify": "npm run check:spec && npm run check:manifest && npm run typecheck && npm run build && npm run check:python && npm run test:smoke",
+    "verify": "npm run check:spec && npm run check:manifest && npm run check:schema && npm run typecheck && npm run build && npm run check:python && npm run test:smoke",
     "prepack": "npm run build"
   },
   "dependencies": {},

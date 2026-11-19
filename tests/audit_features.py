@@ -26,6 +26,8 @@ sys.path.insert(0, str(REPO))
 
 os.environ["QING_DAVINCI_FAKE"] = "1"
 
+from lib.modules.console_text import use_utf8_console  # noqa: E402
+
 LIB = REPO / "lib"
 MODULES = LIB / "modules"
 
@@ -233,6 +235,7 @@ def audit_visual_loop() -> list[str]:
 
 
 def main() -> int:
+    use_utf8_console()
     print("dsh-davinci-qing 功能完整性审查")
     print("=" * 60)
 

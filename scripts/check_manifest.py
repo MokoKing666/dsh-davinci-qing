@@ -6,9 +6,18 @@
 import fnmatch
 import json
 import subprocess
+import sys
 from pathlib import Path
 
-REPO = Path(r"F:\dsh-davinci-qing")
+# Windows 控制台默认 GBK，直接吐 ✅/❌ 会把门禁自己打死
+for _stream in (sys.stdout, sys.stderr):
+    if (_stream.encoding or "").lower() not in {"utf-8", "utf8", "cp65001"}:
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            pass
+
+REPO = Path(__file__).resolve().parent.parent
 pkg = json.loads((REPO / "package.json").read_text(encoding="utf-8"))
 
 tracked = subprocess.run(

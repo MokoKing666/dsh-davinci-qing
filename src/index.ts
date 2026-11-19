@@ -384,15 +384,23 @@ function renderValue(value: unknown): string {
   return `${text.slice(0, MAX_RENDER_CHARS)}\n\n…（结果过长，已截断 ${text.length - MAX_RENDER_CHARS} 字符）`;
 }
 
-/** 统一的输出 schema：结构化结果本身就是 JSON。 */
-const OUTPUT_SCHEMA: Record<string, unknown> = {
+/**
+ * 统一的输出 schema：结构化结果本身就是 JSON。
+ *
+ * 注意 `detail` 故意不写 `type`：它的形状随工具而变（对象、数组或标量都可能），
+ * 写成空 schema 表示「不约束」。千万不要写成 `type: 'json'` —— `json` 不是
+ * JSON Schema 的合法类型，DSH 加载插件时会直接拒绝：
+ * `unsupported JSON schema: schema.properties.detail.type must be one of
+ * object/array/string/number/integer/boolean/null`。
+ */
+export const OUTPUT_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
     ok: { type: 'boolean', description: 'false 表示这次调用没有完成预期动作；读 hint 再决定下一步。' },
     error: { type: 'string', description: '机器可读的错误码，如 preflight_failed / resolve_not_connected。' },
     message: { type: 'string' },
     hint: { type: 'string', description: '中文排查或修正建议。' },
-    detail: { type: 'json' },
+    detail: { description: '工具特定的结构化细节；形状随工具而变，可能是对象、数组或标量。' },
   },
   additionalProperties: true,
 };

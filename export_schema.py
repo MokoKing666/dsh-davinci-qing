@@ -27,6 +27,10 @@ REPO_ROOT = Path(__file__).resolve().parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from lib.modules.console_text import use_utf8_console  # noqa: E402
+
+use_utf8_console()
+
 from lib import __slogan__, __version__  # noqa: E402
 from lib.server import build_server  # noqa: E402
 

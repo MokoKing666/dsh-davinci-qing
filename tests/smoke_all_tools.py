@@ -20,6 +20,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 os.environ["QING_DAVINCI_FAKE"] = "1"
+
+from lib.modules.console_text import use_utf8_console  # noqa: E402
+
+use_utf8_console()
 _TMP = Path(tempfile.mkdtemp(prefix="qing_smoke_"))
 os.environ["QING_STATE_DIR"] = str(_TMP / "state")
 os.environ["QING_TEMP_DIR"] = str(_TMP / "previews")

@@ -128,6 +128,109 @@ def _build_registry(use_mcp_sdk: bool = True) -> tuple[_CollectingServer, Any | 
     return collector, mcp_server
 
 
+def _inline_refs(node: Any, defs: dict[str, Any], stack: tuple[str, ...] = ()) -> Any:
+    """把 JSON Schema 里的 ``$ref`` 就地内联展开，并丢掉 ``$defs``。
+
+    DSH 侧的 schema 校验器不解析 ``$ref``：它只会看 ``schema.properties.X.type``
+    这类直接字段。如果参数类型是 ``list[ClipPlacement]``，pydantic 生成的是
+    ``{"items": {"$ref": "#/$defs/ClipPlacement"}, "$defs": {...}}`` —— ``$defs``
+    被摘掉后，``items`` 就成了指向空气的悬空引用，模型完全看不到嵌套字段的定义，
+    只能瞎猜参数结构。所以这里必须递归展开。
+
+    自引用模型（树形结构）会无限展开，用 ``stack`` 记录正在展开的定义名，
+    一旦成环就截断成开放对象。
+    """
+
+    if isinstance(node, dict):
+        ref = node.get("$ref")
+        if isinstance(ref, str):
+            name = ref.rsplit("/", 1)[-1]
+            target = defs.get(name)
+            if isinstance(target, dict):
+                if name in stack:
+                    # 环形引用：停在这里，保留成不约束的对象
+                    return {"type": "object"}
+                merged = _inline_refs(target, defs, stack + (name,))
+                extra = {
+                    key: value
+                    for key, value in node.items()
+                    if key != "$ref"
+                }
+                if isinstance(merged, dict) and extra:
+                    merged = {**merged, **_inline_refs(extra, defs, stack)}
+                return merged
+            # 悬空引用：退化成不约束，至少不要把它原样抛给 DSH
+            return {"type": "object"}
+
+        return {
+            key: _inline_refs(value, defs, stack)
+            for key, value in node.items()
+            if key not in ("$defs", "definitions")
+        }
+
+    if isinstance(node, list):
+        return [_inline_refs(item, defs, stack) for item in node]
+
+    return node
+
+
+_LEGAL_JSON_SCHEMA_TYPES = frozenset(
+    {"object", "array", "string", "number", "integer", "boolean", "null"}
+)
+
+
+def _coerce_types(node: Any) -> Any:
+    """去掉 JSON Schema 里非法或非标准的 ``type`` 取值。
+
+    DSH 的校验器只认上面那 7 种类型，其它一律拒收并让整个插件加载失败
+    （``unsupported JSON schema: ... must be one of object/array/...``）。
+    遇到不认识的类型就整条丢掉 —— 少一条约束总比插件起不来好。
+    """
+
+    if isinstance(node, dict):
+        result: dict[str, Any] = {}
+        for key, value in node.items():
+            if key == "type":
+                if isinstance(value, str):
+                    if value in _LEGAL_JSON_SCHEMA_TYPES:
+                        result[key] = value
+                    # 非法类型：丢弃这条约束，保留其余字段
+                elif isinstance(value, list):
+                    legal = [
+                        item
+                        for item in value
+                        if isinstance(item, str) and item in _LEGAL_JSON_SCHEMA_TYPES
+                    ]
+                    if legal:
+                        result[key] = legal
+                continue
+            result[key] = _coerce_types(value)
+        return result
+
+    if isinstance(node, list):
+        return [_coerce_types(item) for item in node]
+
+    return node
+
+
+def _sanitize_schema(schema: Any) -> Any:
+    """把任何来源的 JSON Schema 洗成 DSH 校验器能吃的形状。
+
+    两个来源都要过一遍：MCP SDK 的 ``tool.input_schema`` 和签名推断的产物。
+    前者会带 ``$defs``/``$ref``（DSH 不解析），后者已在 ``_schema_from_signature``
+    里内联过，这里再跑一次是幂等的。
+    """
+
+    if not isinstance(schema, dict):
+        return schema
+
+    # 先复制一层：不能就地 pop 掉调用方（MCP SDK）对象里的 $defs
+    schema = dict(schema)
+    defs = schema.pop("$defs", None) or schema.pop("definitions", None) or {}
+    expanded = _inline_refs(schema, defs)
+    return _coerce_types(expanded)
+
+
 def _schema_from_signature(fn: Callable[..., Any]) -> dict[str, Any]:
     """无 MCP SDK 时，从函数签名 + pydantic 模型生成 JSON Schema。"""
 
@@ -155,16 +258,9 @@ def _schema_from_signature(fn: Callable[..., Any]) -> dict[str, Any]:
         except Exception:  # noqa: BLE001
             schema = {"type": "object"}
 
-        # 展开顶层 $ref（pydantic 对自定义模型会返回 $defs + $ref）
-        defs = schema.pop("$defs", None) or schema.pop("definitions", None)
-        if "$ref" in schema and defs:
-            ref_name = schema["$ref"].rsplit("/", 1)[-1]
-            target = defs.get(ref_name, {})
-            merged = dict(target)
-            merged.update({k: v for k, v in schema.items() if k != "$ref"})
-            schema = merged
-            if defs:
-                schema.setdefault("title", ref_name)
+        # 递归内联 $ref（pydantic 对自定义模型会返回 $defs + 嵌套 $ref）
+        defs = schema.pop("$defs", None) or schema.pop("definitions", None) or {}
+        schema = _inline_refs(schema, defs)
 
         if default is not inspect.Parameter.empty and default is not None:
             schema.setdefault("default", default)
@@ -211,7 +307,7 @@ def list_tools(use_mcp_sdk: bool = True) -> list[dict[str, Any]]:
                 schemas[tool.name] = {
                     "name": tool.name,
                     "description": tool.description or "",
-                    "parameters": tool.input_schema,
+                    "parameters": _sanitize_schema(tool.input_schema),
                     "annotations": {
                         "read_only": bool(getattr(annotations, "read_only_hint", False)) if annotations else False,
                         "destructive": bool(getattr(annotations, "destructive_hint", False)) if annotations else False,
@@ -228,7 +324,7 @@ def list_tools(use_mcp_sdk: bool = True) -> list[dict[str, Any]]:
             schemas[name] = {
                 "name": name,
                 "description": definition["description"],
-                "parameters": _schema_from_signature(definition["fn"]),
+                "parameters": _sanitize_schema(_schema_from_signature(definition["fn"])),
                 "annotations": {
                     "read_only": bool(getattr(annotations, "read_only_hint", False)) if annotations else False,
                     "destructive": bool(getattr(annotations, "destructive_hint", False)) if annotations else False,

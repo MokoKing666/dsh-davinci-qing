@@ -25,6 +25,10 @@ PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 if str(PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(PACKAGE_ROOT))
 
+from lib.modules.console_text import use_utf8_console  # noqa: E402
+
+use_utf8_console()
+
 ICON_OK = "[ OK ]"
 ICON_FAIL = "[FAIL]"
 ICON_WARN = "[WARN]"
