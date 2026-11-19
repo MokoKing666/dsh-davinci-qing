@@ -1,0 +1,20 @@
+- insert:
+    - id: mcp-davinci-qing
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: davinci
+        transport: stdio
+        command: python
+        args:
+          - '-m'
+          - 'dsh_davinci_qing.server'
+        env:
+          PYTHONUNBUFFERED: '1'
+          PYTHONIOENCODING: 'utf-8'
+          QING_TRANSPORT: stdio
+        cwd: 'F:\dsh-davinci-qing'
+        toolCallTimeoutMs: 180000
+        startupTimeoutMs: 60000
+        failOnStartupError: true
+        reconnect:
+          enabled: true

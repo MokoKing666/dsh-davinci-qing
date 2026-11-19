@@ -1,0 +1,11 @@
+# dsh-davinci-qing 运行时依赖
+#
+# 说明：本项目基于官方 Python MCP SDK。mcp 2.x 把 FastMCP 改名为 MCPServer，
+# mcp_compat.py 同时兼容两代 SDK，因此这里只要求 >=1.2。
+mcp>=1.2,<3
+
+# 工具参数校验与 JSON Schema 生成（MCP SDK 自身也依赖它）
+pydantic>=2.6,<3
+
+# 可选：模拟器生成演示静帧、预览图缩放（真实 Resolve 场景不需要）
+Pillow>=10.0

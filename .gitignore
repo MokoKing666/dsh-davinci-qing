@@ -1,0 +1,46 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+ENV/
+
+# ---- 测试与工具 ----
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ---- 本项目的运行时产物 ----
+# check_env.py / 工具写出的审计日志与预览帧
+audit.jsonl
+*.log
+previews/
+tests/_state/
+tests/_previews/
+
+# Resolve 备份时间线等本地临时文件
+*.srt.tmp
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 本地环境变量（绝不提交凭据）----
+.env
+.env.*
+!.env.example

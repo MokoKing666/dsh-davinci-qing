@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DaVinci Resolve 青青桥接",
+    "description": "把 DeepSeek Harness 连到 DaVinci Resolve Studio：36 个工具覆盖环境自检、媒体归档、时间线剪辑、调色节点与 LUT/DRX、Fusion 合成、Deliver 渲染队列。批量写入前自动保存工程并复制备份时间线。",
+    "detail": "docs/DETAIL.md"
+  }
+}

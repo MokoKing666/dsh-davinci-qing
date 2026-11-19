@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DaVinci Resolve bridge",
+    "description": "Connects DeepSeek Harness to DaVinci Resolve Studio: 36 tools for environment checks, media archiving, timeline editing, color nodes with LUT/DRX, Fusion comps, and the Deliver queue. Bulk writes save the project and duplicate the timeline first.",
+    "detail": "docs/DETAIL.md"
+  }
+}

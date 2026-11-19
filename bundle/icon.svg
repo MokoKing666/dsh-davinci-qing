@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36" role="img" aria-label="DaVinci Resolve 调色圆盘与青青色环">
+  <defs>
+    <linearGradient id="qingGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4fd1c5"/>
+      <stop offset="55%" stop-color="#2f9fd8"/>
+      <stop offset="100%" stop-color="#1f6fb2"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="34" height="34" rx="9" fill="#0f1b26"/>
+  <!-- 三条色轮弧线：lift / gamma / gain -->
+  <path d="M18 6.5a11.5 11.5 0 0 1 0 23" fill="none" stroke="#4fd1c5" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M18 29.5a11.5 11.5 0 0 1 0-23" fill="none" stroke="#e0a458" stroke-width="2.6" stroke-linecap="round"/>
+  <!-- 中央"节点"方框 -->
+  <rect x="13.4" y="13.4" width="9.2" height="9.2" rx="2.4" fill="none" stroke="url(#qingGrad)" stroke-width="2.4"/>
+  <!-- 中心亮点：青青 -->
+  <circle cx="18" cy="18" r="1.9" fill="#9ff5e6"/>
+  <!-- 时间线基准线 -->
+  <path d="M7.5 31.2h21" stroke="#3d5a70" stroke-width="1.6" stroke-linecap="round"/>
+</svg>
