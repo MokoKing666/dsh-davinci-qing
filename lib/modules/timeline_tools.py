@@ -87,6 +87,57 @@ _PROPERTY_GROUPS = {
     "composite": ("CompositeEnabled", ("Opacity",)),
 }
 
+#: 脚本接口的 ``MarkerColor`` 枚举（16 色，见 DaVinciResolveScript.pyi）。
+MARKER_COLORS = (
+    "Blue",
+    "Cyan",
+    "Green",
+    "Yellow",
+    "Red",
+    "Pink",
+    "Purple",
+    "Fuchsia",
+    "Rose",
+    "Lavender",
+    "Sky",
+    "Mint",
+    "Lemon",
+    "Sand",
+    "Cocoa",
+    "Cream",
+)
+
+#: 友好的导出类型名 → Resolve 常量名（``TimelineExportType``）。
+EXPORT_TYPE_MAP = {
+    "aaf": "EXPORT_AAF",
+    "drt": "EXPORT_DRT",
+    "edl": "EXPORT_EDL",
+    "fcp7xml": "EXPORT_FCP_7_XML",
+    "fcpxml_1_8": "EXPORT_FCPXML_1_8",
+    "fcpxml_1_9": "EXPORT_FCPXML_1_9",
+    "fcpxml_1_10": "EXPORT_FCPXML_1_10",
+    "hdr10_profile_a": "EXPORT_HDR_10_PROFILE_A",
+    "hdr10_profile_b": "EXPORT_HDR_10_PROFILE_B",
+    "text_csv": "EXPORT_TEXT_CSV",
+    "text_tab": "EXPORT_TEXT_TAB",
+    "dolby_vision_2_9": "EXPORT_DOLBY_VISION_VER_2_9",
+    "dolby_vision_4_0": "EXPORT_DOLBY_VISION_VER_4_0",
+    "dolby_vision_5_1": "EXPORT_DOLBY_VISION_VER_5_1",
+    "otio": "EXPORT_OTIO",
+    "ale": "EXPORT_ALE",
+    "ale_cdl": "EXPORT_ALE_CDL",
+}
+
+#: 友好的导出子类型名 → Resolve 常量名（``TimelineExportSubtype``）。
+EXPORT_SUBTYPE_MAP = {
+    "none": "EXPORT_NONE",
+    "aaf_new": "EXPORT_AAF_NEW",
+    "aaf_existing": "EXPORT_AAF_EXISTING",
+    "cdl": "EXPORT_CDL",
+    "sdl": "EXPORT_SDL",
+    "missing_clips": "EXPORT_MISSING_CLIPS",
+}
+
 
 class ClipPlacement(BaseModel):
     """一条待放入时间线的片段指令。"""
@@ -982,6 +1033,379 @@ def register(server: Any) -> None:
                 "checkpoint": checkpoint.as_dict(),
             }
         )
+
+    # --- 标记清理 / 入出点 / 交换格式导出 ---------------------------------
+
+    @qing_tool(
+        server,
+        name="qing_timeline_delete_markers",
+        title="删除时间线标记",
+        summary=(
+            "按颜色、按帧号或按 customData 删除标记。三种模式互斥："
+            "by_color 删除整条时间线上该颜色的全部标记（传 all 等于清空所有标记，很危险）；"
+            "by_frame 只删指定帧上的标记；by_custom_data 按自定义数据精确匹配。"
+            "适合审片意见改完一轮后清场，或重打同色卡点前先清空。"
+            "注意：标记不参与渲染，但删掉后只能靠备份时间线找回。"
+        ),
+        side_effect=SideEffect(
+            effect="从时间线上移除标记（删掉后只能靠备份时间线找回）。",
+            when="重打标记、清理审片意见、批量删错颜色时。",
+            backup=True,
+        ),
+        destructive=True,
+    )
+    def qing_timeline_delete_markers(
+        mode: Annotated[
+            Literal["by_color", "by_frame", "by_custom_data"],
+            Field(description="删除方式：按颜色 / 按帧号 / 按 customData。"),
+        ] = "by_color",
+        color: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "by_color 模式必填：标记颜色，取 MarkerColor 的 16 色之一"
+                    "（Blue/Cyan/Green/Yellow/Red/Pink/Purple/Fuchsia/Rose/Lavender/Sky/Mint/Lemon/Sand/Cocoa/Cream）；"
+                    "传 all 会删除全部标记。"
+                )
+            ),
+        ] = None,
+        frames: Annotated[
+            list[int], Field(description="by_frame 模式必填：要删标记的帧号列表（时间线内的绝对帧号）。")
+        ] = [],
+        custom_data: Annotated[
+            str | None, Field(description="by_custom_data 模式必填：标记的 customData 字符串（精确匹配）。")
+        ] = None,
+        timeline_name: Annotated[str | None, Field(description="时间线名称；留空为当前时间线。")] = None,
+        allow_without_backup: Annotated[bool, Field(description="备份失败时是否仍继续。")] = False,
+        dry_run: Annotated[bool, Field(description="为 true 时只回报将被删除的标记。")] = False,
+    ) -> dict[str, Any]:
+        """批量删除时间线标记。"""
+
+        sess = session()
+        project = sess.project()
+        timeline = _pick_timeline(project, timeline_name)
+        fps = timeline_fps(project)
+        existing = _safe(timeline.GetMarkers) or {}
+
+        def describe(frame: int, info: Any) -> dict[str, Any]:
+            data = dict(info) if isinstance(info, dict) else {}
+            return {
+                "frame": int(frame),
+                "timecode": frames_to_timecode(int(frame), fps),
+                "color": data.get("color"),
+                "name": data.get("name"),
+                "note": data.get("note"),
+                "custom_data": data.get("customData"),
+                "duration": data.get("duration"),
+            }
+
+        wanted_color = ""
+        plan: list[dict[str, Any]] = []
+
+        if mode == "by_color":
+            raw_color = (color or "").strip()
+            if not raw_color:
+                raise ApiFailureError(
+                    "by_color 模式必须给出 color。",
+                    hint="颜色取 Blue/Cyan/Green/Yellow/Red/Pink/Purple/Fuchsia/Rose/Lavender/Sky/Mint/Lemon/Sand/Cocoa/Cream，或 all。",
+                )
+            if raw_color.lower() != "all":
+                matches = [name for name in MARKER_COLORS if name.lower() == raw_color.lower()]
+                if not matches:
+                    raise ApiFailureError(
+                        f"未知的标记颜色：{raw_color}",
+                        hint="可用颜色：" + "/".join(MARKER_COLORS) + "，或 all。",
+                    )
+                wanted_color = matches[0]
+            else:
+                # Resolve 的「全部颜色」用的是首字母大写的 All
+                wanted_color = "All"
+            plan = [
+                describe(frame, info)
+                for frame, info in sorted(existing.items())
+                if raw_color.lower() == "all"
+                or str((info or {}).get("color", "")).lower() == wanted_color.lower()
+            ]
+        elif mode == "by_frame":
+            if not frames:
+                raise ApiFailureError(
+                    "by_frame 模式必须给出 frames。", hint="frames 是时间线内的绝对帧号；先用 qing_timeline_read_markers 看现有标记位置。"
+                )
+            bad = [frame for frame in frames if int(frame) < 0]
+            if bad:
+                raise ApiFailureError(
+                    f"帧号不能为负：{bad}", hint="帧号从 0 起算，对应时间线起点。"
+                )
+            plan = [describe(frame, existing[frame]) for frame in frames if frame in existing]
+        else:
+            wanted_data = (custom_data or "").strip()
+            if not wanted_data:
+                raise ApiFailureError(
+                    "by_custom_data 模式必须给出 custom_data。",
+                    hint="customData 是标记的自定义字段；先用 qing_timeline_read_markers 查。",
+                )
+            plan = [
+                describe(frame, info)
+                for frame, info in sorted(existing.items())
+                if str((info or {}).get("customData", "")) == wanted_data
+            ]
+
+        if dry_run:
+            return ok(
+                {
+                    "dry_run": True,
+                    "mode": mode,
+                    "targets": plan,
+                    "count": len(plan),
+                    "total_markers": len(existing),
+                }
+            )
+
+        checkpoint = resolve_checkpoint(
+            project,
+            timeline,
+            reason="timeline_delete_markers",
+            allow_without_backup=allow_without_backup,
+        )
+
+        removed = False
+        per_frame: list[dict[str, Any]] = []
+        if mode == "by_color":
+            removed = bool(_safe(timeline.DeleteMarkersByColor, wanted_color) or False)
+        elif mode == "by_frame":
+            for frame in frames:
+                done = bool(_safe(timeline.DeleteMarkerAtFrame, int(frame)) or False)
+                per_frame.append({"frame": int(frame), "deleted": done})
+            removed = any(entry["deleted"] for entry in per_frame)
+        else:
+            removed = bool(_safe(timeline.DeleteMarkerByCustomData, custom_data) or False)
+
+        remaining = len(_safe(timeline.GetMarkers) or {})
+        record_mutation(
+            "timeline_delete_markers",
+            {
+                "timeline": _safe(timeline.GetName),
+                "mode": mode,
+                "count": len(plan),
+                "removed": removed,
+                "backup": checkpoint.backup_name,
+            },
+        )
+        payload: dict[str, Any] = {
+            "removed": removed,
+            "mode": mode,
+            "targets": plan,
+            "count": len(plan),
+            "remaining_markers": remaining,
+            "checkpoint": checkpoint.as_dict(),
+        }
+        if per_frame:
+            payload["per_frame"] = per_frame
+        return ok(payload)
+
+    @qing_tool(
+        server,
+        name="qing_timeline_mark_inout",
+        title="读取/设置/清除入出点",
+        summary=(
+            "入出点决定交付与导出的范围（Deliver 的 MarkIn/MarkOut 就取自这里）。"
+            "action=get 读当前入出点（含时间码换算），set 用帧号设定，clear 清除。"
+            "注意脚本接口只吃帧号，不接受时间码字符串；要按时间码给点，先用 qing_timeline_read_markers 之类确认帧号。"
+        ),
+        side_effect=SideEffect(
+            effect="改变时间线的入出点标记（会影响后续渲染与导出的范围）。",
+            when="只想交付时间线中的某一段而不是整条时间线时。",
+            backup=False,
+        ),
+    )
+    def qing_timeline_mark_inout(
+        action: Annotated[
+            Literal["get", "set", "clear"], Field(description="操作：读取 / 设置 / 清除。")
+        ] = "get",
+        mark_in: Annotated[int | None, Field(description="set 时必填：入点帧号（时间线绝对帧）。", ge=0)] = None,
+        mark_out: Annotated[int | None, Field(description="set 时必填：出点帧号，必须大于入点。", ge=0)] = None,
+        mark_type: Annotated[
+            Literal["video", "audio", "all"], Field(description="作用范围：视频 / 音频 / 两者（默认两者）。")
+        ] = "all",
+        timeline_name: Annotated[str | None, Field(description="时间线名称；留空为当前时间线。")] = None,
+    ) -> dict[str, Any]:
+        """读写入出点。"""
+
+        sess = session()
+        project = sess.project()
+        timeline = _pick_timeline(project, timeline_name)
+        fps = timeline_fps(project)
+
+        def decorate(raw: Any) -> dict[str, Any]:
+            result: dict[str, Any] = {}
+            if not isinstance(raw, dict):
+                return result
+            for key, value in raw.items():
+                if isinstance(value, dict):
+                    entry = dict(value)
+                    for edge in ("in", "out"):
+                        if isinstance(entry.get(edge), int):
+                            entry[f"{edge}_timecode"] = frames_to_timecode(int(entry[edge]), fps)
+                    result[key] = entry
+                else:
+                    result[key] = value
+            return result
+
+        if action == "get":
+            return ok(
+                {
+                    "mark_in_out": decorate(_safe(timeline.GetMarkInOut) or {}),
+                    "fps": fps,
+                }
+            )
+
+        if action == "clear":
+            cleared = bool(_safe(timeline.ClearMarkInOut, mark_type) or False)
+            record_mutation(
+                "timeline_mark_inout",
+                {"timeline": _safe(timeline.GetName), "action": "clear", "mark_type": mark_type},
+            )
+            return ok({"cleared": cleared, "mark_type": mark_type,
+                       "mark_in_out": decorate(_safe(timeline.GetMarkInOut) or {})})
+
+        if mark_in is None or mark_out is None:
+            raise ApiFailureError(
+                "set 需要同时给出 mark_in 与 mark_out。",
+                hint="两个都是时间线内的绝对帧号，mark_out 必须大于 mark_in。",
+            )
+        if mark_out <= mark_in:
+            raise ApiFailureError(
+                f"出点必须大于入点：mark_in={mark_in}, mark_out={mark_out}",
+                hint="至少相差 1 帧；如果只是想标记位置，用 qing_timeline_add_markers。",
+            )
+
+        applied = bool(_safe(timeline.SetMarkInOut, int(mark_in), int(mark_out), mark_type) or False)
+        record_mutation(
+            "timeline_mark_inout",
+            {
+                "timeline": _safe(timeline.GetName),
+                "action": "set",
+                "mark_in": int(mark_in),
+                "mark_out": int(mark_out),
+                "mark_type": mark_type,
+            },
+        )
+        return ok(
+            {
+                "applied": applied,
+                "mark_in": int(mark_in),
+                "mark_out": int(mark_out),
+                "duration_frames": int(mark_out) - int(mark_in),
+                "mark_in_timecode": frames_to_timecode(int(mark_in), fps),
+                "mark_out_timecode": frames_to_timecode(int(mark_out), fps),
+                "mark_type": mark_type,
+                "mark_in_out": decorate(_safe(timeline.GetMarkInOut) or {}),
+            }
+        )
+
+    @qing_tool(
+        server,
+        name="qing_timeline_export",
+        title="导出时间线交换格式",
+        summary=(
+            "把时间线导出成 AAF / FCP7 XML / FCPXML / EDL / OTIO / ALE / CDL / Dolby Vision / HDR10 等交换文件，"
+            "用于交给 Pro Tools、Premiere、Final Cut 或归档。"
+            "只导出剪辑结构，不含渲染画面（要画面请用交付队列）；文件已存在时会被直接覆盖。"
+        ),
+        side_effect=SideEffect(
+            effect="在磁盘上写出一个交换文件（不修改工程与时间线，但会覆盖同名文件）。",
+            when="跨软件交接、声音回批、交付归档时。",
+            backup=False,
+        ),
+    )
+    def qing_timeline_export(
+        target_path: Annotated[str, Field(description="导出文件的绝对路径（含扩展名，如 D:\\out\\cut.aaf）。")],
+        export_type: Annotated[
+            Literal[
+                "aaf",
+                "drt",
+                "edl",
+                "fcp7xml",
+                "fcpxml_1_8",
+                "fcpxml_1_9",
+                "fcpxml_1_10",
+                "hdr10_profile_a",
+                "hdr10_profile_b",
+                "text_csv",
+                "text_tab",
+                "dolby_vision_2_9",
+                "dolby_vision_4_0",
+                "dolby_vision_5_1",
+                "otio",
+                "ale",
+                "ale_cdl",
+            ],
+            Field(description="导出格式。aaf 给 Pro Tools，fcp7xml/fcpxml 给其他 NLE，edl 给套底清单，otio 给流程中间格式。"),
+        ] = "aaf",
+        export_subtype: Annotated[
+            Literal["none", "aaf_new", "aaf_existing", "cdl", "sdl", "missing_clips"],
+            Field(description="子类型：aaf 用 aaf_new（新建）或 aaf_existing（链接已有），CDL/SDL 配 ale_cdl，其余用 none。"),
+        ] = "none",
+        timeline_name: Annotated[str | None, Field(description="时间线名称；留空为当前时间线。")] = None,
+    ) -> dict[str, Any]:
+        """导出时间线交换文件。"""
+
+        sess = session()
+        project = sess.project()
+        timeline = _pick_timeline(project, timeline_name)
+
+        path = Path(target_path).expanduser()
+        if not path.is_absolute():
+            raise ApiFailureError(
+                f"target_path 必须是绝对路径：{target_path}",
+                hint="例如 D:\\deliver\\cut.aaf；相对路径会落到不可预期的位置。",
+            )
+        if not path.parent.is_dir():
+            raise ApiFailureError(
+                f"输出目录不存在：{path.parent}",
+                hint="先用资源管理器/命令行建好目录，再调用导出。",
+            )
+
+        resolve = sess.resolve
+        type_name = EXPORT_TYPE_MAP[export_type]
+        subtype_name = EXPORT_SUBTYPE_MAP[export_subtype]
+        sentinel = object()
+        type_value = getattr(resolve, type_name, sentinel)
+        if type_value is sentinel:
+            raise UnsupportedError(
+                f"当前 Resolve 版本不支持导出类型 {export_type}（缺少常量 {type_name}）。",
+                hint="升级 Resolve 到 v19/v20/v21，或改用 aaf / fcp7xml / edl / otio。",
+            )
+        subtype_value = getattr(resolve, subtype_name, sentinel)
+        if subtype_value is sentinel:
+            raise UnsupportedError(
+                f"当前 Resolve 版本缺少子类型常量 {subtype_name}。",
+                hint="export_subtype 改用 none 再试。",
+            )
+
+        overwritten = path.exists()
+        done = bool(_safe(timeline.Export, str(path), type_value, subtype_value) or False)
+        record_mutation(
+            "timeline_export",
+            {
+                "timeline": _safe(timeline.GetName),
+                "path": str(path),
+                "export_type": export_type,
+                "ok": done,
+            },
+        )
+        payload: dict[str, Any] = {
+            "exported": done,
+            "path": str(path),
+            "export_type": export_type,
+            "export_subtype": export_subtype,
+            "overwritten": overwritten,
+        }
+        if done and path.exists():
+            payload["size_bytes"] = path.stat().st_size
+        elif not done:
+            payload["hint"] = "Resolve 拒绝了这次导出：检查 target_path 扩展名与 export_type 是否匹配、时间线是否为空。"
+        return ok(payload)
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""全工具冒烟测试：对 36 个工具各打一次最小调用，确保没有"未预期崩溃"。
+"""全工具冒烟测试：对 43 个工具各打一次最小调用，确保没有"未预期崩溃"。
 
 判定标准：
 * ``ok=true``            → 工具正常工作；
@@ -39,6 +39,8 @@ DRX = _TMP / "look.drx"
 DRX.write_text("<xml/>", encoding="utf-8")
 SRT = _TMP / "sub.srt"
 SRT.write_text("1\n00:00:01,000 --> 00:00:02,000\n青青\n", encoding="utf-8")
+EXPORT_DIR = _TMP / "exports"
+EXPORT_DIR.mkdir()
 
 KNOWN_ERRORS = {
     "preflight_failed", "api_failure", "unsupported", "no_project", "no_timeline",
@@ -57,6 +59,7 @@ CASES: list[tuple[str, dict]] = [
     ("qing_media_search", {"query": "A001"}),
     ("qing_media_auto_bin", {"rule": "by_kind", "source_bin": "Master/Smoke"}),
     ("qing_media_set_metadata", {"metadata": {"Scene": "1"}, "bin_path": "Master"}),
+    ("qing_media_export_metadata", {"target_path": str(_TMP / "metadata.csv")}),
     ("qing_timeline_inspect", {}),
     ("qing_timeline_create", {"name": "Smoke_TL", "fps": "25"}),
     ("qing_timeline_add_clips", {"placements": [
@@ -67,11 +70,18 @@ CASES: list[tuple[str, dict]] = [
     ("qing_timeline_set_clip_properties", {"properties": {"ZoomX": 1.1}, "item_indexes": [0]}),
     ("qing_timeline_add_markers", {"markers": [{"frame": 5, "color": "Red", "name": "m1"}]}),
     ("qing_timeline_read_markers", {}),
+    # 入出点：Deliver 的 MarkIn/MarkOut 就取这里，所以放在导出与交付之前
+    ("qing_timeline_mark_inout", {"action": "set", "mark_in": 0, "mark_out": 48, "mark_type": "all"}),
+    ("qing_timeline_mark_inout", {"action": "get"}),
+    ("qing_timeline_export", {"target_path": str(EXPORT_DIR / "smoke.aaf"), "export_type": "aaf", "export_subtype": "aaf_new"}),
+    ("qing_timeline_delete_markers", {"mode": "by_color", "color": "Red"}),
     ("qing_timeline_import_srt", {"srt_path": str(SRT)}),
     ("qing_timeline_set_track_state", {"track_type": "video", "track_index": 2, "locked": False}),
     ("qing_color_inspect_nodes", {}),
-    ("qing_color_set_lut", {"lut_path": str(CUBE), "node_index": 1}),
-    ("qing_color_set_node_enabled", {"node_index": 1, "enabled": True}),
+    ("qing_color_label_nodes", {"node_index": 1, "label": "BALANCE", "color": "Orange"}),
+    # 用 label 定位，覆盖「删节点后序号会重排」的稳定寻址路径
+    ("qing_color_set_lut", {"lut_path": str(CUBE), "node_label": "BALANCE"}),
+    ("qing_color_set_node_enabled", {"node_label": "BALANCE", "enabled": True}),
     # copy_grade 放在 delete_clips 之前，保证时间线上仍有多个片段
     ("qing_color_copy_grade", {"whole_timeline": True}),
     ("qing_color_apply_drx", {"drx_path": str(DRX), "scope": "whole_timeline"}),
@@ -83,7 +93,9 @@ CASES: list[tuple[str, dict]] = [
     ("qing_media_markers_to_subclips", {"clip_name": "A001C003_20240315_0001"}),
     ("qing_timeline_delete_clips", {"item_indexes": [0]}),
     ("qing_deliver_list_presets", {}),
-    ("qing_deliver_setup_job", {"jobs": [{"target_dir": str(_TMP / "render"), "preset": "H.264 Master"}]}),
+    ("qing_deliver_formats", {"format_name": "MP4"}),
+    ("qing_deliver_render_settings", {"target_dir": str(_TMP / "render"), "frame_rate": 25, "use_unique_filenames": True}),
+    ("qing_deliver_setup_job", {"jobs": [{"target_dir": str(_TMP / "render"), "preset": "H.264 Master", "on_existing": "unique"}]}),
     ("qing_deliver_queue_status", {}),
     ("qing_deliver_start", {"wait_seconds": 0}),
     ("qing_deliver_stop", {}),

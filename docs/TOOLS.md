@@ -2,7 +2,7 @@
 
 > 让青青住进你的dsh
 
-共 **36** 个 MCP 工具。本文档由 `export_schema.py` 自动生成，请勿手工编辑；参数表与 JSON Schema 同源。
+共 **43** 个 MCP 工具。本文档由 `export_schema.py` 自动生成，请勿手工编辑；参数表与 JSON Schema 同源。
 
 图例：🔍 只读 · ⚠️ 破坏性（会改动工程内容） · 💾 自动检查点（执行前 SaveProject + 复制时间线）
 
@@ -67,6 +67,19 @@
 | `source_bin` | string | 否 | 要处理的素材箱路径（默认整个 Master 根，递归）。 |
 | `target_prefix` | string | 否 | 新素材箱的父路径，如 'Master/Imported'；留空则建在源素材箱下。 |
 | `dry_run` | boolean | 否 | 为 true 时只返回分组计划，不移动。（默认 false） |
+
+### `qing_media_export_metadata` — 导出素材元数据表
+
+把媒体池素材的元数据导出成 CSV（MediaPool.ExportMetadata），并回读表头把**真实字段名**列出来。Resolve 的元数据字段在不同版本/不同素材类型下不一致（Description 与 Comments 是两个字段、Camera # 的键名就是 Camera），猜键名常常白写；先导出表头，再照着用 qing_media_set_metadata。
+
+- 【副作用】在磁盘上写出一个 CSV（不改素材池里的任何内容）。
+- 【触发时机】批量写元数据之前先确认字段名；或把场记表交给 Excel 校对时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `target_path` | string | 是 | 导出 CSV 的绝对路径（含 .csv 扩展名）。 |
+| `clip_names` | string[] | 否 | 只导出这些素材；留空导出整个媒体池。 |
+| `bin_path` | string | 否 | 只导出该素材箱下的素材（默认全池）。 |
 
 ### `qing_media_import_folder` — 递归导入素材到媒体池
 
@@ -246,6 +259,38 @@
 | `allow_without_backup` | boolean | 否 | 备份失败时是否仍继续。（默认 false） |
 | `dry_run` | boolean | 否 | 为 true 时只回报将要删除的片段。（默认 false） |
 
+### `qing_timeline_delete_markers` — 删除时间线标记 ⚠️ 💾
+
+按颜色、按帧号或按 customData 删除标记。三种模式互斥：by_color 删除整条时间线上该颜色的全部标记（传 all 等于清空所有标记，很危险）；by_frame 只删指定帧上的标记；by_custom_data 按自定义数据精确匹配。适合审片意见改完一轮后清场，或重打同色卡点前先清空。注意：标记不参与渲染，但删掉后只能靠备份时间线找回。
+
+- 【副作用】从时间线上移除标记（删掉后只能靠备份时间线找回）。
+- 【触发时机】重打标记、清理审片意见、批量删错颜色时。
+- 【自动备份】执行前会 SaveProject() 并 DuplicateTimeline 生成 `[Backup_HHMMSS]_原时间线名`。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `mode` | enum | 否 | 删除方式：按颜色 / 按帧号 / 按 customData。（默认 'by_color'） |
+| `color` | string | 否 | by_color 模式必填：标记颜色，取 MarkerColor 的 16 色之一（Blue/Cyan/Green/Yellow/Red/Pink/Purple/Fuchsia/Rose/Lavender/Sky/Mint/Lemon/Sand/Cocoa/Cream）；传 all 会删除全部标记。 |
+| `frames` | integer[] | 否 | by_frame 模式必填：要删标记的帧号列表（时间线内的绝对帧号）。（默认 []） |
+| `custom_data` | string | 否 | by_custom_data 模式必填：标记的 customData 字符串（精确匹配）。 |
+| `timeline_name` | string | 否 | 时间线名称；留空为当前时间线。 |
+| `allow_without_backup` | boolean | 否 | 备份失败时是否仍继续。（默认 false） |
+| `dry_run` | boolean | 否 | 为 true 时只回报将被删除的标记。（默认 false） |
+
+### `qing_timeline_export` — 导出时间线交换格式
+
+把时间线导出成 AAF / FCP7 XML / FCPXML / EDL / OTIO / ALE / CDL / Dolby Vision / HDR10 等交换文件，用于交给 Pro Tools、Premiere、Final Cut 或归档。只导出剪辑结构，不含渲染画面（要画面请用交付队列）；文件已存在时会被直接覆盖。
+
+- 【副作用】在磁盘上写出一个交换文件（不修改工程与时间线，但会覆盖同名文件）。
+- 【触发时机】跨软件交接、声音回批、交付归档时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `target_path` | string | 是 | 导出文件的绝对路径（含扩展名，如 D:\out\cut.aaf）。 |
+| `export_type` | enum | 否 | 导出格式。aaf 给 Pro Tools，fcp7xml/fcpxml 给其他 NLE，edl 给套底清单，otio 给流程中间格式。（默认 'aaf'） |
+| `export_subtype` | enum | 否 | 子类型：aaf 用 aaf_new（新建）或 aaf_existing（链接已有），CDL/SDL 配 ale_cdl，其余用 none。（默认 'none'） |
+| `timeline_name` | string | 否 | 时间线名称；留空为当前时间线。 |
+
 ### `qing_timeline_get_clip_properties` — 读取片段属性 🔍
 
 读取时间线上某片段（或某轨道上的第 N 个片段 / 播放头所在片段）的变换、裁切、动态缩放等属性的当前值。
@@ -300,6 +345,21 @@
 | `include_items` | boolean | 否 | 是否返回片段明细。（默认 true） |
 | `item_limit` | integer | 否 | 最多返回多少个片段。（默认 60） |
 | `include_markers` | boolean | 否 | 是否返回标记列表。（默认 true） |
+
+### `qing_timeline_mark_inout` — 读取/设置/清除入出点
+
+入出点决定交付与导出的范围（Deliver 的 MarkIn/MarkOut 就取自这里）。action=get 读当前入出点（含时间码换算），set 用帧号设定，clear 清除。注意脚本接口只吃帧号，不接受时间码字符串；要按时间码给点，先用 qing_timeline_read_markers 之类确认帧号。
+
+- 【副作用】改变时间线的入出点标记（会影响后续渲染与导出的范围）。
+- 【触发时机】只想交付时间线中的某一段而不是整条时间线时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `action` | enum | 否 | 操作：读取 / 设置 / 清除。（默认 'get'） |
+| `mark_in` | integer | 否 | set 时必填：入点帧号（时间线绝对帧）。 |
+| `mark_out` | integer | 否 | set 时必填：出点帧号，必须大于入点。 |
+| `mark_type` | enum | 否 | 作用范围：视频 / 音频 / 两者（默认两者）。（默认 'all'） |
+| `timeline_name` | string | 否 | 时间线名称；留空为当前时间线。 |
 
 ### `qing_timeline_read_markers` — 读取时间线标记 🔍
 
@@ -384,7 +444,7 @@
 
 ### `qing_color_apply_drx` — 应用 .drx 预设（PowerGrade） ⚠️ 💾
 
-把 .drx 静帧预设（PowerGrade）应用到片段、指定颜色标签的片段组或整条时间线。适合 Log 还原、胶片模拟等完整节点流的批量落地。
+把 .drx 静帧预设（PowerGrade）应用到片段、指定颜色标签的片段组或整条时间线。适合 Log 还原、胶片模拟等完整节点流的批量落地。注意：.drx 只包含调色与节点结构、不含画面；默认只作用于当前 Node Editor 模式（Clip Grade 或 Timeline Grade）那一套节点，需要全部图层时把 apply_to_all_layers 设为 true。
 
 - 【副作用】在目标片段节点图末尾叠加/应用 DRX 的节点流（破坏性，会改变画面）。
 - 【触发时机】导入胶片模拟预设、统一 Log→709 管线、把某个镜头的外观复制给整场时。
@@ -397,13 +457,15 @@
 | `clip_color` | string | 否 | scope=clip_group 时必填，如 'Orange'。 |
 | `item_index` | integer | 否 | scope=item_index 时的片段序号（0 基，视频轨道 1）。 |
 | `grade_mode` | enum | 否 | 关键帧对齐方式：0 无关键帧 / 1 按源时间码 / 2 按起始帧。（默认 0） |
+| `apply_to_all_layers` | boolean | 否 | 为 true 时把预设应用到这个片段的**所有图层**；默认只作用于当前 Node Editor 模式（Clip Grade 或 Timeline Grade）那一套节点。（默认 false） |
+| `keyframe_mode` | enum | 否 | 带关键帧时对哪一类关键帧生效：all（全部）/ color（仅调色）/ sizing（仅缩放变换）。（默认 'all'） |
 | `timeline_name` | string | 否 | 时间线名称；留空为当前时间线。 |
 | `allow_without_backup` | boolean | 否 | 备份失败时是否仍继续。（默认 false） |
 | `dry_run` | boolean | 否 | 为 true 时只回报目标片段。（默认 false） |
 
 ### `qing_color_copy_grade` — 批量复制调色 ⚠️ 💾
 
-把源片段（或播放头所在片段）的完整调色节点树复制到一批目标片段（``CopyGrades``）。常用于整场戏统一基础调色后逐条做局部调整。
+把源片段（或播放头所在片段）的完整调色节点树复制到一批目标片段（``CopyGrades``）。常用于整场戏统一基础调色后逐条做局部调整。注意：这是**整体覆盖**——目标片段原有的 grade 会被换掉；Resolve 的 API 没有「保留目标节点、只粘贴部分」的选项，关键帧也不会带过去，需要的话得手动补。
 
 - 【副作用】覆盖目标片段的全部调色节点（破坏性）。
 - 【触发时机】同一机位/同一场景多个镜头需要统一基底，再做局部微调时。
@@ -421,7 +483,7 @@
 
 ### `qing_color_grab_frame` — 导出当前帧做视觉审片
 
-把当前播放头画面导出为 PNG/JPG 并把图片直接返回（多模态可直接查看），同时给出文件路径。用于检查曝光、高光溢出、肤色与构图，形成 挂载预设 → 截图审片 → 参数微调 的闭环。
+把当前播放头画面导出为 PNG/JPG 并把图片直接返回（多模态可直接查看），同时给出文件路径，以及一份从导出文件量出来的像素统计（死白/死黑面积、亮度分位数、饱和度），用于检查曝光、高光、肤色与构图，形成 挂载预设 → 截图审片 → 参数微调 的闭环。注意图片是「显示参考」，不是示波器：精确的信号级判断仍以 Resolve 的波形图为准。
 
 - 【副作用】在临时目录写一张静帧文件；会临时把界面切到调色页（不修改工程内容）。
 - 【触发时机】应用 LUT / DRX / 复制调色之后确认画面；或需要给用户展示某一刻构图时。
@@ -437,7 +499,7 @@
 
 ### `qing_color_inspect_nodes` — 解析片段节点树 🔍
 
-读取片段（或整条时间线）的调色节点树：节点数量、标签、启用状态、挂载的 LUT、节点内工具列表。可批量覆盖多条片段，便于判断调色是否统一。
+读取片段（或整条时间线）的调色节点树：节点数量、标签与色标、启用状态、挂载的 LUT、节点内改过的工具组。可批量覆盖多条片段，便于判断调色是否统一。返回的 index 是 1 基序号，**删节点后会整体重排**；要长期引用某个节点请用 label。
 
 - 【副作用】只读（唯一例外：某些版本读取节点 LUT 会触发一次 LUT 列表刷新）。
 - 【触发时机】接手一镜调色、检查批量套用结果、或决定要挂 LUT 到第几个节点之前。
@@ -450,18 +512,37 @@
 | `whole_timeline` | boolean | 否 | 为 true 时返回时间线上每个视频片段的节点摘要（用于检查调色一致性）。（默认 false） |
 | `max_clips` | integer | 否 | whole_timeline 时最多检查多少个片段。（默认 30） |
 
+### `qing_color_label_nodes` — 给节点命名/上色 💾
+
+给片段的节点设置标签（label）与色标（color）。节点序号会随增删节点重排，而标签不会——想让「第 3 个节点」这类指令长期可靠，先用本工具把关键节点命名成 LOOK / BALANCE / GRAIN 之类，后续所有节点工具都可以改用 node_label 定位。标签默认宽度下最多显示 12 个字符，随 still 一起保存。
+
+- 【副作用】修改节点标签与色标（可逆：再调用一次改回去即可；不影响画面）。
+- 【触发时机】建立稳定节点流命名（Log 还原/风格/颗粒各一层）、批量整理别人交付的工程、或准备用 node_label 寻址前。
+- 【自动备份】执行前会 SaveProject() 并 DuplicateTimeline 生成 `[Backup_HHMMSS]_原时间线名`。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `label` | string | 是 | 新标签（建议 ≤12 个字符，过长会被截断显示）。 |
+| `node_index` | integer | 否 | 节点序号（1 基）。给了 node_label 时忽略；两者都不给则报错。 |
+| `node_label` | string | 否 | 要改名的现有节点标签（用于定位，不是新名字）。 |
+| `color` | string | 否 | 节点色标（如 'Orange' / 'Blue' / '' 表示清除）。留空表示不改色标。 |
+| `item_index` | integer | 否 | 片段序号（0 基）；留空取播放头所在片段。 |
+| `track_index` | integer | 否 | 视频轨道序号（1 基）。（默认 1） |
+| `timeline_name` | string | 否 | 时间线名称；留空为当前时间线。 |
+
 ### `qing_color_set_lut` — 在节点上挂载 3D LUT ⚠️ 💾
 
-把 .cube/.ilut/.olut 3D LUT 挂到指定片段的指定节点上（节点序号 1 基）。可一次给多个片段批量套用，如整条时间线的 Log 还原。
+把 .cube/.ilut/.olut 3D LUT 挂到指定片段的指定节点上，可一次批量套用到多片段（如整条时间线的 Log 还原）。节点用 node_label（推荐，删节点不会错位）或 1 基 node_index 定位。注意：Resolve 没有「只读挂载」，该节点原有 LUT 会被直接替换；返回值里回读被覆盖的原 LUT。
 
-- 【副作用】覆盖目标节点原有的 LUT（破坏性：原 LUT 会被替换，可用备份时间线回滚）。
-- 【触发时机】Log 素材需要统一还原、批量套拍风格 LUT、或临时替换 LUT 做对比。
+- 【副作用】覆盖目标节点原有的 LUT（破坏性：原 LUT 被替换；备份时间线可回滚，但 Resolve 原生撤销不保证可用）。
+- 【触发时机】Log 素材需要统一还原、批量套拍风格 LUT、或临时替换 LUT 做 A/B 对比。
 - 【自动备份】执行前会 SaveProject() 并 DuplicateTimeline 生成 `[Backup_HHMMSS]_原时间线名`。
 
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `lut_path` | string | 是 | LUT 文件绝对路径（.cube / .ilut / .olut）。 |
-| `node_index` | integer | 否 | 目标节点序号（1 基，1..节点总数）。（默认 1） |
+| `node_index` | integer | 否 | 目标节点序号（1 基，1..节点总数）。给了 node_label 时忽略。（默认 1） |
+| `node_label` | string | 否 | 目标节点标签（推荐）。节点序号在删除节点后会重排，标签才是稳定键。 |
 | `item_index` | integer | 否 | 片段序号（0 基）；留空取播放头所在片段。whole_timeline 为真时忽略。 |
 | `track_index` | integer | 否 | 视频轨道序号（1 基）。（默认 1） |
 | `timeline_name` | string | 否 | 时间线名称；留空为当前时间线。 |
@@ -472,7 +553,7 @@
 
 ### `qing_color_set_node_enabled` — 启用/旁通节点 ⚠️ 💾
 
-开启或旁通（bypass）指定片段的指定节点，用于 A/B 对比单步调色效果。
+开启或旁通（bypass）指定片段的指定节点，用于 A/B 对比单步调色效果。只改这一个节点，不会碰到其它被单独旁通的节点（调色台的「全部启用」会误开那些节点）。节点用 node_label（推荐）或 1 基 node_index 定位。
 
 - 【副作用】改变节点启用状态（破坏性：会改变最终画面）。
 - 【触发时机】对比某一节点的贡献、临时关掉 LUT 检查原片、或批量统一旁通某个固定节点。
@@ -480,8 +561,9 @@
 
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `node_index` | integer | 是 | 节点序号（1 基）。 |
-| `enabled` | boolean | 是 | true 启用，false 旁通。 |
+| `enabled` | boolean | 是 | true 启用，false 旁通（bypass）。 |
+| `node_index` | integer | 否 | 节点序号（1 基）。给了 node_label 时忽略。（默认 1） |
+| `node_label` | string | 否 | 目标节点标签（推荐）。节点序号在删除节点后会重排，标签才是稳定键。 |
 | `item_index` | integer | 否 | 片段序号（0 基）；留空取播放头所在片段。 |
 | `track_index` | integer | 否 | 视频轨道序号（1 基）。（默认 1） |
 | `timeline_name` | string | 否 | 时间线名称；留空为当前时间线。 |
@@ -492,9 +574,9 @@
 
 ### `qing_fusion_add_tool` — 添加 Fusion 节点 ⚠️ 💾
 
-给片段的 Fusion 合成添加一个节点（TextPlus / Transform / ColorCorrector / Merge / Blur 等），可同时写入初始输入值。片段没有合成时会自动新建。
+给片段的 Fusion 合成添加一个节点（TextPlus / Transform / ColorCorrector / Merge / Blur 等），可同时写入初始输入值。片段没有合成时会自动新建。注意：Fusion 界面里只有「恰好选中一个节点」时才把新节点接在其后（手册 p1304/p1307），而脚本 AddTool 新建的节点默认是**未连线**的；未连线的节点不参与输出、画面不会变。connect_to_output=true 会尝试把它接到 MediaOut，但脚本接口对连线的支持随版本而异——返回值里 connected_to_output=false 就说明没接上，需要到 Fusion 页面手动连线（或在已选中单个节点时再试）。
 
-- 【副作用】修改片段画面（新增节点并连线到 MediaOut）。属于破坏性写入。
+- 【副作用】在片段上新增 Fusion 节点并可能改写合成连线（破坏性，可用备份时间线回滚）。
 - 【触发时机】要加字幕条、角标、水印、简单合成或局部模糊时。
 - 【自动备份】执行前会 SaveProject() 并 DuplicateTimeline 生成 `[Backup_HHMMSS]_原时间线名`。
 
@@ -575,6 +657,18 @@
 | --- | --- | --- | --- |
 | `job_ids` | string[] | 否 | 要删除的任务 id；留空清空整个队列。 |
 
+### `qing_deliver_formats` — 查询可用渲染格式与分辨率 🔍
+
+列出当前工程可用的渲染格式（格式名 → 文件扩展名）、音频格式、以及指定格式下的编码与分辨率。GetRenderCodecs 收的是**文件扩展名**（如 mp4/mov），不是格式名，本工具会自动换算。不同 Resolve 安装可选格式不同，配置渲染前先查一次能少踩很多坑。
+
+- 【副作用】只读。
+- 【触发时机】要指定编码/分辨率，或想确认当前工程到底能出哪些格式时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `format_name` | string | 否 | 要细查的格式名（如 MP4 / QuickTime）；留空只列格式清单与当前选择。 |
+| `include_resolutions` | boolean | 否 | 是否列出该格式（及编码）支持的分辨率。（默认 true） |
+
 ### `qing_deliver_list_presets` — 列出交付渲染预设 🔍
 
 列出当前工程可用的 Deliver 渲染预设（GetRenderPresetList），并报告当前已加载的预设与输出设置。
@@ -588,6 +682,41 @@
 
 - 【副作用】只读。
 - 【触发时机】入队之后启动之前核对；渲染中轮询进度。
+
+### `qing_deliver_render_settings` — 直接写入渲染设置
+
+绕过预设，直接写 Resolve 的 RenderSettings（输出目录/文件名/格式/编码/分辨率/帧率/画质/色彩空间/alpha/字幕/渲染区间/同名文件策略）。只改设置，不入队；写完可用 qing_deliver_setup_job 入队。适合预设覆盖不到的细节（ColorSpaceTag、AlphaMode、UniqueFilenameStyle 这些），或要精确复现某台机器的交付规格。
+
+- 【副作用】改写当前工程的渲染设置（影响到之后入队的每个任务），不动时间线内容。
+- 【触发时机】预设不够用、要精确控制编码/色彩标签/字幕嵌入方式时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `target_dir` | string | 否 | 输出目录（绝对路径；不存在会自动创建）。 |
+| `custom_name` | string | 否 | 输出文件名（不含扩展名）。 |
+| `format_name` | string | 否 | 渲染格式名（见 qing_deliver_formats，如 MP4 / QuickTime）。 |
+| `codec` | string | 否 | 编码名（见 qing_deliver_formats 返回的 codecs 值，如 H264）。 |
+| `width` | integer | 否 | 输出宽度（像素）。 |
+| `height` | integer | 否 | 输出高度（像素）。 |
+| `frame_rate` | number | 否 | 输出帧率（如 24 / 25 / 29.97）。 |
+| `video_quality` | integer | 否 | 画质：0 表示按码率自动，或 Least/Low/Medium/High/Best。 |
+| `export_video` | boolean | 否 | 是否导出视频。 |
+| `export_audio` | boolean | 否 | 是否导出音频。 |
+| `color_space_tag` | string | 否 | 色彩空间标签（如 Rec.709 / Rec.2020 HLG A）。 |
+| `gamma_tag` | string | 否 | Gamma 标签（如 Gamma 2.4 / ST2084）。 |
+| `export_alpha` | boolean | 否 | 是否带 alpha 通道（仅支持的编码有效）。 |
+| `alpha_mode` | enum | 否 | alpha 模式：premultiplied（预乘）或 straight（直通）。 |
+| `encoding_profile` | string | 否 | 编码 profile（如 High / Main10）。 |
+| `pixel_aspect_ratio` | string | 否 | 像素宽高比（如 Square）。 |
+| `select_all_frames` | boolean | 否 | 是否渲染整条时间线（true 会忽略入出点）。 |
+| `mark_in` | integer | 否 | 渲染入点（帧）。 |
+| `mark_out` | integer | 否 | 渲染出点（帧）。 |
+| `use_unique_filenames` | boolean | 否 | 同名时是否自动改文件名（防覆盖）。 |
+| `unique_filename_style` | enum | 否 | 自动改名时加前缀还是后缀。 |
+| `export_subtitle` | boolean | 否 | 是否导出字幕。 |
+| `subtitle_format` | enum | 否 | 字幕方式：烧录 / 嵌入字幕轨 / 单独文件。 |
+| `use_full_extents` | boolean | 否 | 是否渲染完整画面范围（不按空白裁切）。 |
+| `dry_run` | boolean | 否 | 为 true 时只回报将要写入的设置。（默认 false） |
 
 ### `qing_deliver_setup_job` — 配置并添加渲染任务
 
@@ -619,6 +748,7 @@
 | `export_audio` | boolean | 否 | 是否导出音频。（默认 true） |
 | `export_subtitle` | boolean | 否 | 是否导出字幕（需 v19.1+）。true/false 对应 BurnIn/EmbeddedCaptions 之外的单独文件。 |
 | `subtitle_format` | enum | 否 | 字幕嵌入方式（配合 export_subtitle 使用）。 |
+| `on_existing` | enum | 否 | 输出目录里已有同名文件时怎么办（Resolve 默认会静默覆盖、不报错）：overwrite 直接覆盖；unique 让 Resolve 自动加后缀另起新名；fail 在入队前就报错停下。（默认 'overwrite'） |
 
 </details>
 

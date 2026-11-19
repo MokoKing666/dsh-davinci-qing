@@ -135,6 +135,39 @@ class _Resolve:
     def SetKeyframeMode(self, mode: int) -> bool:
         return True
 
+    # 常量 ----------------------------------------------------------------
+    # 真实 Resolve 的 ``TimelineExportType`` / ``TimelineExportSubtype`` /
+    # ``KeyframeMode`` 都是 resolve 对象上的浮点常量；这里照抄名字与量级，
+    # 好让 ``getattr(resolve, "EXPORT_AAF")`` 这套取常量的写法在离线也能跑通。
+    EXPORT_AAF = 1.0
+    EXPORT_DRT = 2.0
+    EXPORT_EDL = 3.0
+    EXPORT_FCP_7_XML = 4.0
+    EXPORT_FCPXML_1_8 = 5.0
+    EXPORT_FCPXML_1_9 = 6.0
+    EXPORT_FCPXML_1_10 = 7.0
+    EXPORT_HDR_10_PROFILE_A = 8.0
+    EXPORT_HDR_10_PROFILE_B = 9.0
+    EXPORT_TEXT_CSV = 10.0
+    EXPORT_TEXT_TAB = 11.0
+    EXPORT_DOLBY_VISION_VER_2_9 = 12.0
+    EXPORT_DOLBY_VISION_VER_4_0 = 13.0
+    EXPORT_DOLBY_VISION_VER_5_1 = 14.0
+    EXPORT_OTIO = 15.0
+    EXPORT_ALE = 16.0
+    EXPORT_ALE_CDL = 17.0
+
+    EXPORT_NONE = 0.0
+    EXPORT_AAF_NEW = 1.0
+    EXPORT_AAF_EXISTING = 2.0
+    EXPORT_CDL = 3.0
+    EXPORT_SDL = 4.0
+    EXPORT_MISSING_CLIPS = 5.0
+
+    KEYFRAME_MODE_ALL = 0.0
+    KEYFRAME_MODE_COLOR = 1.0
+    KEYFRAME_MODE_SIZING = 2.0
+
     # 管理器 ---------------------------------------------------------------
     def GetProjectManager(self) -> Any:
         return _state().project_manager
@@ -433,10 +466,35 @@ class _Project:
         return True
 
     def GetRenderFormats(self) -> dict[str, str]:
-        return {"mp4": "MP4", "mov": "QuickTime", "mxf": "MXF OP1A"}
+        # 真实 API：``{格式名: 文件扩展名}``
+        return {"MP4": "mp4", "QuickTime": "mov", "MXF OP1A": "mxf"}
+
+    def GetAudioRenderFormats(self) -> dict[str, str]:
+        return {"WAV": "wav", "AIFF": "aif"}
 
     def GetRenderCodecs(self, renderFormatFileExtension: str) -> dict[str, str]:
-        return {"H264": "H.264", "H265": "H.265", "ProRes422HQ": "Apple ProRes 422 HQ"}
+        table = {
+            "mp4": {"H264": "H.264", "H265": "H.265"},
+            "mov": {"ProRes422HQ": "Apple ProRes 422 HQ", "ProRes4444": "Apple ProRes 4444"},
+            "mxf": {"DNxHRHQX": "DNxHR HQX"},
+        }
+        return dict(table.get(renderFormatFileExtension, {}))
+
+    def GetAudioRenderCodecs(self, audioRenderFormatFileExtension: str) -> dict[str, str]:
+        return {"LinearPCM": "Linear PCM"}
+
+    def GetRenderResolutions(self, format: str | None = None, codec: str | None = None) -> list[dict[str, int]]:
+        return [
+            {"Width": 1920, "Height": 1080},
+            {"Width": 3840, "Height": 2160},
+        ]
+
+    def GetCurrentRenderMode(self) -> int:
+        # 0 = Individual clips（多条片段），1 = Single clip（整条一个文件）
+        return 1
+
+    def SetCurrentRenderMode(self, renderMode: int) -> bool:
+        return int(renderMode) in (0, 1)
 
     # 静帧 -----------------------------------------------------------------
     def ExportCurrentFrameAsStill(self, filePath: str) -> bool:
@@ -457,6 +515,15 @@ class _Project:
 # ---------------------------------------------------------------------------
 # 静帧 / 缩略图生成（用 Pillow，失败时退化为最小 PNG）
 # ---------------------------------------------------------------------------
+
+
+def _csv_cell(value: Any) -> str:
+    """CSV 单元格转义（含逗号/引号/换行时加引号并把引号翻倍）。"""
+
+    text = "" if value is None else str(value)
+    if any(ch in text for ch in (",", '"', "\n", "\r")):
+        return '"' + text.replace('"', '""') + '"'
+    return text
 
 
 def _write_demo_still(target: Path) -> bool:
@@ -565,6 +632,51 @@ class _MediaPool:
             return False
         for clip in clips:
             self._root._remove_clip(clip)
+        return True
+
+    def ExportMetadata(self, fileName: str, clips: list[Any] | None = None) -> bool:
+        """导出元数据 CSV。
+
+        真实 API: ``ExportMetadata(fileName, clips=None) -> bool``，
+        ``clips`` 为空表示整个媒体池；导出的表头就是当前 Resolve 版本承认的
+        元数据键名（所以工具会回读表头）。这里用固定几张表模拟同样的形状。
+        """
+        target = Path(fileName)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        selected = clips
+        if selected is None:
+            selected = []
+            for folder in self._root._walk():
+                selected.extend(folder._clips)
+        columns = [
+            "File Name", "Reel Name", "Clip Directory", "Scene", "Shot", "Take",
+            "Camera", "Angle", "Good Take", "Keywords", "Description", "Comments",
+            "People", "Rating", "Duration", "Frames",
+        ]
+        rows = []
+        for clip in selected or []:
+            meta = getattr(clip, "_metadata", {}) or {}
+            row = [
+                clip.GetName(),
+                meta.get("Reel Name", clip.GetName()),
+                clip.GetClipProperty("File Path") or "",
+                meta.get("Scene", ""),
+                meta.get("Shot", ""),
+                meta.get("Take", ""),
+                meta.get("Camera #", meta.get("Camera", "")),
+                meta.get("Angle", ""),
+                meta.get("Good Take", ""),
+                meta.get("Keywords", ""),
+                meta.get("Description", ""),
+                meta.get("Comments", ""),
+                meta.get("People", ""),
+                meta.get("Rating", ""),
+                str(clip.GetClipProperty("Duration") or ""),
+                str(clip.GetClipProperty("Frames") or ""),
+            ]
+            rows.append(",".join(_csv_cell(value) for value in row))
+        target.write_text(",".join(_csv_cell(c) for c in columns) + "\n" + "\n".join(rows) + "\n",
+                          encoding="utf-8-sig")
         return True
 
     def MoveClips(self, clips: list[Any], targetFolder: Any) -> bool:
@@ -743,6 +855,7 @@ class _Timeline:
         self._project = project
         self._items: list[_TimelineItem] = []
         self._markers: dict[int, dict[str, Any]] = {}
+        self._mark_in_out: dict[str, dict[str, int]] = {}
         self._tracks: dict[str, int] = {"video": 2, "audio": 2, "subtitle": 0}
         self._track_locks: dict[tuple[str, int], bool] = {}
         self._track_enabled: dict[tuple[str, int], bool] = {}
@@ -949,6 +1062,43 @@ class _Timeline:
             del self._markers[frame]
         return True
 
+    def DeleteMarkerByCustomData(self, customData: str) -> bool:
+        for frame in [f for f, m in self._markers.items() if m.get("customData") == customData]:
+            del self._markers[frame]
+        return True
+
+    def UpdateMarkerCustomData(self, frameId: int, customData: str) -> bool:
+        marker = self._markers.get(int(frameId))
+        if marker is None:
+            return False
+        marker["customData"] = customData
+        return True
+
+    def GetMarkerCustomData(self, frameId: int) -> str:
+        marker = self._markers.get(int(frameId))
+        return str((marker or {}).get("customData", ""))
+
+    # 入出点 ---------------------------------------------------------------
+    def GetMarkInOut(self) -> dict[str, Any]:
+        # 真实 API 返回 ``{"video": {"in":…, "out":…}, "audio": {...}}``；
+        # 没设过入出点时对应分支为空字典。
+        return copy.deepcopy(self._mark_in_out)
+
+    def SetMarkInOut(self, markIn: int, markOut: int, markType: str | None = None) -> bool:
+        if int(markIn) < 0 or int(markOut) <= int(markIn):
+            return False
+        scopes = ("video", "audio") if markType in (None, "all") else (markType,)
+        for scope in scopes:
+            self._mark_in_out[scope] = {"in": int(markIn), "out": int(markOut)}
+        return True
+
+    def ClearMarkInOut(self, markType: str | None = None) -> bool:
+        if markType in (None, "all"):
+            self._mark_in_out.clear()
+        else:
+            self._mark_in_out.pop(markType, None)
+        return True
+
     # 复制 -----------------------------------------------------------------
     def DuplicateTimeline(self, timelineName: str) -> Any:
         if any(t._name == timelineName for t in self._project._timelines):
@@ -956,6 +1106,7 @@ class _Timeline:
         clone = _Timeline(timelineName, self._project)
         clone._tracks = dict(self._tracks)
         clone._markers = copy.deepcopy(self._markers)
+        clone._mark_in_out = copy.deepcopy(self._mark_in_out)
         clone._track_locks = dict(self._track_locks)
         clone._track_enabled = dict(self._track_enabled)
         clone._track_names = dict(self._track_names)
@@ -1196,8 +1347,10 @@ class _TimelineItem:
 class _Graph:
     def __init__(self, name: str) -> None:
         self._nodes: list[dict[str, Any]] = [
-            {"label": "Serial 1", "lut": "", "enabled": True, "tools": ["PrimaryIn"]},
-            {"label": "Serial 2", "lut": "", "enabled": True, "tools": []},
+            {"label": "Serial 1", "lut": "", "enabled": True, "tools": ["PrimaryIn"],
+             "color": "", "cache": 0},
+            {"label": "Serial 2", "lut": "", "enabled": True, "tools": [],
+             "color": "", "cache": 0},
         ]
         self._name = name
 
@@ -1214,6 +1367,28 @@ class _Graph:
             self._nodes[nodeIndex - 1]["label"] = label
             return True
         return False
+
+    def GetNodeColor(self, nodeIndex: int) -> str:
+        if 1 <= nodeIndex <= len(self._nodes):
+            return self._nodes[nodeIndex - 1]["color"]
+        return ""
+
+    def SetNodeColor(self, nodeIndex: int, colorName: str) -> bool:
+        if not 1 <= nodeIndex <= len(self._nodes):
+            return False
+        self._nodes[nodeIndex - 1]["color"] = str(colorName or "")
+        return True
+
+    def GetNodeCacheMode(self, nodeIndex: int) -> int:
+        if 1 <= nodeIndex <= len(self._nodes):
+            return int(self._nodes[nodeIndex - 1]["cache"])
+        return 0
+
+    def SetNodeCacheMode(self, nodeIndex: int, mode: int) -> bool:
+        if not 1 <= nodeIndex <= len(self._nodes):
+            return False
+        self._nodes[nodeIndex - 1]["cache"] = int(mode)
+        return True
 
     def GetToolsInNode(self, nodeIndex: int) -> list[str]:
         if 1 <= nodeIndex <= len(self._nodes):
@@ -1244,16 +1419,34 @@ class _Graph:
             return bool(self._nodes[nodeIndex - 1]["enabled"])
         return False
 
-    def ApplyGradeFromDRX(self, path: str, gradeMode: int) -> bool:
+    def ApplyGradeFromDRX(
+        self,
+        path: str,
+        gradeMode: int,
+        applyToAllLayers: bool = False,
+        keyframeMode: int = 0,
+    ) -> bool:
+        # 真实 API 契约：ApplyGradeFromDRX(path, gradeMode, applyToAllLayers, keyframeMode)。
+        # 模拟器不区分图层与关键帧模式，只校验参数形态与文件存在性。
         if not Path(path).exists() or gradeMode not in (0, 1, 2):
             return False
         self._nodes.append(
-            {"label": f"DRX {Path(path).stem}", "lut": "", "enabled": True, "tools": ["SerialNode"]}
+            {
+                "label": f"DRX {Path(path).stem}",
+                "lut": "",
+                "enabled": True,
+                "tools": ["SerialNode"],
+                "color": "",
+                "cache": 0,
+            }
         )
         return True
 
     def ResetAllGrades(self) -> bool:
-        self._nodes = [{"label": "Serial 1", "lut": "", "enabled": True, "tools": ["PrimaryIn"]}]
+        self._nodes = [
+            {"label": "Serial 1", "lut": "", "enabled": True, "tools": ["PrimaryIn"],
+             "color": "", "cache": 0}
+        ]
         return True
 
 

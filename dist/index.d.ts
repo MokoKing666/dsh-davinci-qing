@@ -8,7 +8,7 @@
  * 本文件**不实现任何达芬奇业务逻辑**。它只做三件事：
  *
  * 1. 启动并托管一个常驻 Python 进程（`lib/resolve_bridge.py --serve`）；
- * 2. 把 Python 报上来的 36 个 `qing_*` 工具注册进 `ctx.tools`
+ * 2. 把 Python 报上来的 43 个 `qing_*` 工具注册进 `ctx.tools`
  *    （schema 完全来自 Python，TS 侧不做二次翻译，因此两边永不漂移）；
  * 3. 每个工具被调用时，把 `(name, args)` 通过 JSON-RPC 交给 Python，
  *    拿回结构化结果并渲染成文本内容块。

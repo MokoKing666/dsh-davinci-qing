@@ -237,13 +237,17 @@ def main(argv: list[str] | None = None) -> int:
 
     document, markdown = build_documents()
 
+    # 显式 newline="\n"：Windows 上默认会把 \n 翻成 \r\n，而仓库按 LF 存储，
+    # 那样每次生成都会让工作区变脏（.gitattributes 里 eol=lf 只是提交时归一）。
     json_path = out_dir / "tool-schemas.json"
-    json_path.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    json_path.write_text(
+        json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n"
+    )
     print(f"已写入 {json_path}（{document['tool_count']} 个工具）")
 
     if not args.json_only:
         md_path = out_dir / "TOOLS.md"
-        md_path.write_text(markdown, encoding="utf-8")
+        md_path.write_text(markdown, encoding="utf-8", newline="\n")
         print(f"已写入 {md_path}")
 
     return 0

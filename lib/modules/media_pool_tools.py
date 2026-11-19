@@ -457,6 +457,91 @@ def register(server: Any) -> None:
 
     @qing_tool(
         server,
+        name="qing_media_export_metadata",
+        title="导出素材元数据表",
+        summary=(
+            "把媒体池素材的元数据导出成 CSV（MediaPool.ExportMetadata），并回读表头把**真实字段名**列出来。"
+            "Resolve 的元数据字段在不同版本/不同素材类型下不一致（Description 与 Comments 是两个字段、"
+            "Camera # 的键名就是 Camera），猜键名常常白写；先导出表头，再照着用 qing_media_set_metadata。"
+        ),
+        side_effect=SideEffect(
+            effect="在磁盘上写出一个 CSV（不改素材池里的任何内容）。",
+            when="批量写元数据之前先确认字段名；或把场记表交给 Excel 校对时。",
+        ),
+    )
+    def qing_media_export_metadata(
+        target_path: Annotated[str, Field(description="导出 CSV 的绝对路径（含 .csv 扩展名）。")],
+        clip_names: Annotated[
+            list[str] | None, Field(description="只导出这些素材；留空导出整个媒体池。")
+        ] = None,
+        bin_path: Annotated[str | None, Field(description="只导出该素材箱下的素材（默认全池）。")] = None,
+    ) -> dict[str, Any]:
+        """导出元数据 CSV 并回读字段名。"""
+
+        path = Path(target_path).expanduser()
+        if not path.is_absolute():
+            raise ApiFailureError(
+                f"target_path 必须是绝对路径：{target_path}",
+                hint="例如 D:\\deliver\\metadata.csv。",
+            )
+        if not path.parent.is_dir():
+            raise ApiFailureError(
+                f"输出目录不存在：{path.parent}", hint="先建好目录再导出。"
+            )
+
+        sess = session()
+        pool = sess.media_pool()
+        root = pool.GetRootFolder()
+        scope = find_folder(root, bin_path) if bin_path else root
+        if scope is None:
+            raise ApiFailureError(f"找不到素材箱：{bin_path}")
+
+        clips: list[Any] | None = None
+        if clip_names or bin_path:
+            wanted = {name.lower() for name in (clip_names or [])}
+            selected: list[Any] = []
+            for _path, clip in iter_media_pool_clips(scope, recursive=True):
+                name = _safe_name(clip).lower()
+                if not wanted or name in wanted:
+                    selected.append(clip)
+            if not selected:
+                raise ApiFailureError(
+                    "没有匹配到任何素材。",
+                    hint="用 qing_media_list_bins 或 qing_media_search 确认素材名。",
+                )
+            clips = selected
+
+        try:
+            exported = bool(pool.ExportMetadata(str(path), clips) if clips is not None
+                            else pool.ExportMetadata(str(path)))
+        except TypeError:
+            # 老版本不支持 clips 参数，退回整池导出
+            exported = bool(pool.ExportMetadata(str(path)))
+        except Exception as exc:  # noqa: BLE001
+            raise ApiFailureError(f"导出元数据失败：{exc}") from exc
+
+        payload: dict[str, Any] = {
+            "exported": exported,
+            "path": str(path),
+            "clip_count": len(clips) if clips is not None else None,
+        }
+        if exported and path.exists():
+            payload["size_bytes"] = path.stat().st_size
+            try:
+                with path.open("r", encoding="utf-8-sig", errors="replace") as handle:
+                    header = handle.readline().strip()
+                payload["columns"] = [column.strip() for column in header.split(",") if column.strip()]
+            except OSError as exc:
+                payload["columns_error"] = str(exc)
+        elif not exported:
+            payload["hint"] = (
+                "ExportMetadata 返回 False：检查目标路径是否可写、素材池是否为空、"
+                "或该素材箱里有不支持导出的合成片段。"
+            )
+        return ok(payload)
+
+    @qing_tool(
+        server,
         name="qing_media_search",
         title="在媒体池里搜索素材",
         summary="按名称/路径/元数据关键字在媒体池里检索素材，返回名称、路径、时长与所在素材箱。",

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "slogan": "让青青住进你的dsh",
   "generated_by": "export_schema.py",
-  "tool_count": 36,
+  "tool_count": 43,
   "tools": [
     {
       "name": "qing_open_page",
@@ -178,6 +178,61 @@
           "rule"
         ],
         "title": "qing_media_auto_binArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "qing_media_export_metadata",
+      "title": "导出素材元数据表",
+      "layer": "媒体池与归档",
+      "summary": "把媒体池素材的元数据导出成 CSV（MediaPool.ExportMetadata），并回读表头把**真实字段名**列出来。Resolve 的元数据字段在不同版本/不同素材类型下不一致（Description 与 Comments 是两个字段、Camera # 的键名就是 Camera），猜键名常常白写；先导出表头，再照着用 qing_media_set_metadata。",
+      "side_effects": "【副作用】在磁盘上写出一个 CSV（不改素材池里的任何内容）。\n【触发时机】批量写元数据之前先确认字段名；或把场记表交给 Excel 校对时。",
+      "annotations": {
+        "read_only": false,
+        "destructive": false,
+        "idempotent": false
+      },
+      "input_schema": {
+        "properties": {
+          "target_path": {
+            "description": "导出 CSV 的绝对路径（含 .csv 扩展名）。",
+            "title": "Target Path",
+            "type": "string"
+          },
+          "clip_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "只导出这些素材；留空导出整个媒体池。",
+            "title": "Clip Names"
+          },
+          "bin_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "只导出该素材箱下的素材（默认全池）。",
+            "title": "Bin Path"
+          }
+        },
+        "required": [
+          "target_path"
+        ],
+        "title": "qing_media_export_metadataArguments",
         "type": "object"
       }
     },
@@ -929,6 +984,173 @@
       }
     },
     {
+      "name": "qing_timeline_delete_markers",
+      "title": "删除时间线标记",
+      "layer": "时间线编辑",
+      "summary": "按颜色、按帧号或按 customData 删除标记。三种模式互斥：by_color 删除整条时间线上该颜色的全部标记（传 all 等于清空所有标记，很危险）；by_frame 只删指定帧上的标记；by_custom_data 按自定义数据精确匹配。适合审片意见改完一轮后清场，或重打同色卡点前先清空。注意：标记不参与渲染，但删掉后只能靠备份时间线找回。",
+      "side_effects": "【副作用】从时间线上移除标记（删掉后只能靠备份时间线找回）。\n【触发时机】重打标记、清理审片意见、批量删错颜色时。\n【自动备份】执行前会 SaveProject() 并 DuplicateTimeline 生成 `[Backup_HHMMSS]_原时间线名`。",
+      "annotations": {
+        "read_only": false,
+        "destructive": true,
+        "idempotent": false
+      },
+      "input_schema": {
+        "properties": {
+          "mode": {
+            "default": "by_color",
+            "description": "删除方式：按颜色 / 按帧号 / 按 customData。",
+            "enum": [
+              "by_color",
+              "by_frame",
+              "by_custom_data"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "by_color 模式必填：标记颜色，取 MarkerColor 的 16 色之一（Blue/Cyan/Green/Yellow/Red/Pink/Purple/Fuchsia/Rose/Lavender/Sky/Mint/Lemon/Sand/Cocoa/Cream）；传 all 会删除全部标记。",
+            "title": "Color"
+          },
+          "frames": {
+            "default": [],
+            "description": "by_frame 模式必填：要删标记的帧号列表（时间线内的绝对帧号）。",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Frames",
+            "type": "array"
+          },
+          "custom_data": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "by_custom_data 模式必填：标记的 customData 字符串（精确匹配）。",
+            "title": "Custom Data"
+          },
+          "timeline_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "时间线名称；留空为当前时间线。",
+            "title": "Timeline Name"
+          },
+          "allow_without_backup": {
+            "default": false,
+            "description": "备份失败时是否仍继续。",
+            "title": "Allow Without Backup",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "default": false,
+            "description": "为 true 时只回报将被删除的标记。",
+            "title": "Dry Run",
+            "type": "boolean"
+          }
+        },
+        "title": "qing_timeline_delete_markersArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "qing_timeline_export",
+      "title": "导出时间线交换格式",
+      "layer": "时间线编辑",
+      "summary": "把时间线导出成 AAF / FCP7 XML / FCPXML / EDL / OTIO / ALE / CDL / Dolby Vision / HDR10 等交换文件，用于交给 Pro Tools、Premiere、Final Cut 或归档。只导出剪辑结构，不含渲染画面（要画面请用交付队列）；文件已存在时会被直接覆盖。",
+      "side_effects": "【副作用】在磁盘上写出一个交换文件（不修改工程与时间线，但会覆盖同名文件）。\n【触发时机】跨软件交接、声音回批、交付归档时。",
+      "annotations": {
+        "read_only": false,
+        "destructive": false,
+        "idempotent": false
+      },
+      "input_schema": {
+        "properties": {
+          "target_path": {
+            "description": "导出文件的绝对路径（含扩展名，如 D:\\out\\cut.aaf）。",
+            "title": "Target Path",
+            "type": "string"
+          },
+          "export_type": {
+            "default": "aaf",
+            "description": "导出格式。aaf 给 Pro Tools，fcp7xml/fcpxml 给其他 NLE，edl 给套底清单，otio 给流程中间格式。",
+            "enum": [
+              "aaf",
+              "drt",
+              "edl",
+              "fcp7xml",
+              "fcpxml_1_8",
+              "fcpxml_1_9",
+              "fcpxml_1_10",
+              "hdr10_profile_a",
+              "hdr10_profile_b",
+              "text_csv",
+              "text_tab",
+              "dolby_vision_2_9",
+              "dolby_vision_4_0",
+              "dolby_vision_5_1",
+              "otio",
+              "ale",
+              "ale_cdl"
+            ],
+            "title": "Export Type",
+            "type": "string"
+          },
+          "export_subtype": {
+            "default": "none",
+            "description": "子类型：aaf 用 aaf_new（新建）或 aaf_existing（链接已有），CDL/SDL 配 ale_cdl，其余用 none。",
+            "enum": [
+              "none",
+              "aaf_new",
+              "aaf_existing",
+              "cdl",
+              "sdl",
+              "missing_clips"
+            ],
+            "title": "Export Subtype",
+            "type": "string"
+          },
+          "timeline_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "时间线名称；留空为当前时间线。",
+            "title": "Timeline Name"
+          }
+        },
+        "required": [
+          "target_path"
+        ],
+        "title": "qing_timeline_exportArguments",
+        "type": "object"
+      }
+    },
+    {
       "name": "qing_timeline_get_clip_properties",
       "title": "读取片段属性",
       "layer": "时间线编辑",
@@ -1144,6 +1366,87 @@
           }
         },
         "title": "qing_timeline_inspectArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "qing_timeline_mark_inout",
+      "title": "读取/设置/清除入出点",
+      "layer": "时间线编辑",
+      "summary": "入出点决定交付与导出的范围（Deliver 的 MarkIn/MarkOut 就取自这里）。action=get 读当前入出点（含时间码换算），set 用帧号设定，clear 清除。注意脚本接口只吃帧号，不接受时间码字符串；要按时间码给点，先用 qing_timeline_read_markers 之类确认帧号。",
+      "side_effects": "【副作用】改变时间线的入出点标记（会影响后续渲染与导出的范围）。\n【触发时机】只想交付时间线中的某一段而不是整条时间线时。",
+      "annotations": {
+        "read_only": false,
+        "destructive": false,
+        "idempotent": false
+      },
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "get",
+            "description": "操作：读取 / 设置 / 清除。",
+            "enum": [
+              "get",
+              "set",
+              "clear"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "mark_in": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "set 时必填：入点帧号（时间线绝对帧）。",
+            "title": "Mark In"
+          },
+          "mark_out": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "set 时必填：出点帧号，必须大于入点。",
+            "title": "Mark Out"
+          },
+          "mark_type": {
+            "default": "all",
+            "description": "作用范围：视频 / 音频 / 两者（默认两者）。",
+            "enum": [
+              "video",
+              "audio",
+              "all"
+            ],
+            "title": "Mark Type",
+            "type": "string"
+          },
+          "timeline_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "时间线名称；留空为当前时间线。",
+            "title": "Timeline Name"
+          }
+        },
+        "title": "qing_timeline_mark_inoutArguments",
         "type": "object"
       }
     },
@@ -1673,7 +1976,7 @@
       "name": "qing_color_apply_drx",
       "title": "应用 .drx 预设（PowerGrade）",
       "layer": "Color 调色",
-      "summary": "把 .drx 静帧预设（PowerGrade）应用到片段、指定颜色标签的片段组或整条时间线。适合 Log 还原、胶片模拟等完整节点流的批量落地。",
+      "summary": "把 .drx 静帧预设（PowerGrade）应用到片段、指定颜色标签的片段组或整条时间线。适合 Log 还原、胶片模拟等完整节点流的批量落地。注意：.drx 只包含调色与节点结构、不含画面；默认只作用于当前 Node Editor 模式（Clip Grade 或 Timeline Grade）那一套节点，需要全部图层时把 apply_to_all_layers 设为 true。",
       "side_effects": "【副作用】在目标片段节点图末尾叠加/应用 DRX 的节点流（破坏性，会改变画面）。\n【触发时机】导入胶片模拟预设、统一 Log→709 管线、把某个镜头的外观复制给整场时。\n【自动备份】执行前会 SaveProject() 并 DuplicateTimeline 生成 `[Backup_HHMMSS]_原时间线名`。",
       "annotations": {
         "read_only": false,
@@ -1736,6 +2039,23 @@
             "title": "Grade Mode",
             "type": "integer"
           },
+          "apply_to_all_layers": {
+            "default": false,
+            "description": "为 true 时把预设应用到这个片段的**所有图层**；默认只作用于当前 Node Editor 模式（Clip Grade 或 Timeline Grade）那一套节点。",
+            "title": "Apply To All Layers",
+            "type": "boolean"
+          },
+          "keyframe_mode": {
+            "default": "all",
+            "description": "带关键帧时对哪一类关键帧生效：all（全部）/ color（仅调色）/ sizing（仅缩放变换）。",
+            "enum": [
+              "all",
+              "color",
+              "sizing"
+            ],
+            "title": "Keyframe Mode",
+            "type": "string"
+          },
           "timeline_name": {
             "anyOf": [
               {
@@ -1773,7 +2093,7 @@
       "name": "qing_color_copy_grade",
       "title": "批量复制调色",
       "layer": "Color 调色",
-      "summary": "把源片段（或播放头所在片段）的完整调色节点树复制到一批目标片段（``CopyGrades``）。常用于整场戏统一基础调色后逐条做局部调整。",
+      "summary": "把源片段（或播放头所在片段）的完整调色节点树复制到一批目标片段（``CopyGrades``）。常用于整场戏统一基础调色后逐条做局部调整。注意：这是**整体覆盖**——目标片段原有的 grade 会被换掉；Resolve 的 API 没有「保留目标节点、只粘贴部分」的选项，关键帧也不会带过去，需要的话得手动补。",
       "side_effects": "【副作用】覆盖目标片段的全部调色节点（破坏性）。\n【触发时机】同一机位/同一场景多个镜头需要统一基底，再做局部微调时。\n【自动备份】执行前会 SaveProject() 并 DuplicateTimeline 生成 `[Backup_HHMMSS]_原时间线名`。",
       "annotations": {
         "read_only": false,
@@ -1864,7 +2184,7 @@
       "name": "qing_color_grab_frame",
       "title": "导出当前帧做视觉审片",
       "layer": "Color 调色",
-      "summary": "把当前播放头画面导出为 PNG/JPG 并把图片直接返回（多模态可直接查看），同时给出文件路径。用于检查曝光、高光溢出、肤色与构图，形成 挂载预设 → 截图审片 → 参数微调 的闭环。",
+      "summary": "把当前播放头画面导出为 PNG/JPG 并把图片直接返回（多模态可直接查看），同时给出文件路径，以及一份从导出文件量出来的像素统计（死白/死黑面积、亮度分位数、饱和度），用于检查曝光、高光、肤色与构图，形成 挂载预设 → 截图审片 → 参数微调 的闭环。注意图片是「显示参考」，不是示波器：精确的信号级判断仍以 Resolve 的波形图为准。",
       "side_effects": "【副作用】在临时目录写一张静帧文件；会临时把界面切到调色页（不修改工程内容）。\n【触发时机】应用 LUT / DRX / 复制调色之后确认画面；或需要给用户展示某一刻构图时。",
       "annotations": {
         "read_only": false,
@@ -1938,7 +2258,7 @@
       "name": "qing_color_inspect_nodes",
       "title": "解析片段节点树",
       "layer": "Color 调色",
-      "summary": "读取片段（或整条时间线）的调色节点树：节点数量、标签、启用状态、挂载的 LUT、节点内工具列表。可批量覆盖多条片段，便于判断调色是否统一。",
+      "summary": "读取片段（或整条时间线）的调色节点树：节点数量、标签与色标、启用状态、挂载的 LUT、节点内改过的工具组。可批量覆盖多条片段，便于判断调色是否统一。返回的 index 是 1 基序号，**删节点后会整体重排**；要长期引用某个节点请用 label。",
       "side_effects": "【副作用】只读（唯一例外：某些版本读取节点 LUT 会触发一次 LUT 列表刷新）。\n【触发时机】接手一镜调色、检查批量套用结果、或决定要挂 LUT 到第几个节点之前。",
       "annotations": {
         "read_only": true,
@@ -2001,11 +2321,112 @@
       }
     },
     {
+      "name": "qing_color_label_nodes",
+      "title": "给节点命名/上色",
+      "layer": "Color 调色",
+      "summary": "给片段的节点设置标签（label）与色标（color）。节点序号会随增删节点重排，而标签不会——想让「第 3 个节点」这类指令长期可靠，先用本工具把关键节点命名成 LOOK / BALANCE / GRAIN 之类，后续所有节点工具都可以改用 node_label 定位。标签默认宽度下最多显示 12 个字符，随 still 一起保存。",
+      "side_effects": "【副作用】修改节点标签与色标（可逆：再调用一次改回去即可；不影响画面）。\n【触发时机】建立稳定节点流命名（Log 还原/风格/颗粒各一层）、批量整理别人交付的工程、或准备用 node_label 寻址前。\n【自动备份】执行前会 SaveProject() 并 DuplicateTimeline 生成 `[Backup_HHMMSS]_原时间线名`。",
+      "annotations": {
+        "read_only": false,
+        "destructive": false,
+        "idempotent": false
+      },
+      "input_schema": {
+        "properties": {
+          "label": {
+            "description": "新标签（建议 ≤12 个字符，过长会被截断显示）。",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "node_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "节点序号（1 基）。给了 node_label 时忽略；两者都不给则报错。",
+            "title": "Node Index"
+          },
+          "node_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "要改名的现有节点标签（用于定位，不是新名字）。",
+            "title": "Node Label"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "节点色标（如 'Orange' / 'Blue' / '' 表示清除）。留空表示不改色标。",
+            "title": "Color"
+          },
+          "item_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "片段序号（0 基）；留空取播放头所在片段。",
+            "title": "Item Index"
+          },
+          "track_index": {
+            "default": 1,
+            "description": "视频轨道序号（1 基）。",
+            "maximum": 99,
+            "minimum": 1,
+            "title": "Track Index",
+            "type": "integer"
+          },
+          "timeline_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "时间线名称；留空为当前时间线。",
+            "title": "Timeline Name"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "qing_color_label_nodesArguments",
+        "type": "object"
+      }
+    },
+    {
       "name": "qing_color_set_lut",
       "title": "在节点上挂载 3D LUT",
       "layer": "Color 调色",
-      "summary": "把 .cube/.ilut/.olut 3D LUT 挂到指定片段的指定节点上（节点序号 1 基）。可一次给多个片段批量套用，如整条时间线的 Log 还原。",
-      "side_effects": "【副作用】覆盖目标节点原有的 LUT（破坏性：原 LUT 会被替换，可用备份时间线回滚）。\n【触发时机】Log 素材需要统一还原、批量套拍风格 LUT、或临时替换 LUT 做对比。\n【自动备份】执行前会 SaveProject() 并 DuplicateTimeline 生成 `[Backup_HHMMSS]_原时间线名`。",
+      "summary": "把 .cube/.ilut/.olut 3D LUT 挂到指定片段的指定节点上，可一次批量套用到多片段（如整条时间线的 Log 还原）。节点用 node_label（推荐，删节点不会错位）或 1 基 node_index 定位。注意：Resolve 没有「只读挂载」，该节点原有 LUT 会被直接替换；返回值里回读被覆盖的原 LUT。",
+      "side_effects": "【副作用】覆盖目标节点原有的 LUT（破坏性：原 LUT 被替换；备份时间线可回滚，但 Resolve 原生撤销不保证可用）。\n【触发时机】Log 素材需要统一还原、批量套拍风格 LUT、或临时替换 LUT 做 A/B 对比。\n【自动备份】执行前会 SaveProject() 并 DuplicateTimeline 生成 `[Backup_HHMMSS]_原时间线名`。",
       "annotations": {
         "read_only": false,
         "destructive": true,
@@ -2019,12 +2440,30 @@
             "type": "string"
           },
           "node_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "default": 1,
-            "description": "目标节点序号（1 基，1..节点总数）。",
-            "maximum": 100,
-            "minimum": 1,
-            "title": "Node Index",
-            "type": "integer"
+            "description": "目标节点序号（1 基，1..节点总数）。给了 node_label 时忽略。",
+            "title": "Node Index"
+          },
+          "node_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "目标节点标签（推荐）。节点序号在删除节点后会重排，标签才是稳定键。",
+            "title": "Node Label"
           },
           "item_index": {
             "anyOf": [
@@ -2103,7 +2542,7 @@
       "name": "qing_color_set_node_enabled",
       "title": "启用/旁通节点",
       "layer": "Color 调色",
-      "summary": "开启或旁通（bypass）指定片段的指定节点，用于 A/B 对比单步调色效果。",
+      "summary": "开启或旁通（bypass）指定片段的指定节点，用于 A/B 对比单步调色效果。只改这一个节点，不会碰到其它被单独旁通的节点（调色台的「全部启用」会误开那些节点）。节点用 node_label（推荐）或 1 基 node_index 定位。",
       "side_effects": "【副作用】改变节点启用状态（破坏性：会改变最终画面）。\n【触发时机】对比某一节点的贡献、临时关掉 LUT 检查原片、或批量统一旁通某个固定节点。\n【自动备份】执行前会 SaveProject() 并 DuplicateTimeline 生成 `[Backup_HHMMSS]_原时间线名`。",
       "annotations": {
         "read_only": false,
@@ -2112,17 +2551,36 @@
       },
       "input_schema": {
         "properties": {
-          "node_index": {
-            "description": "节点序号（1 基）。",
-            "maximum": 100,
-            "minimum": 1,
-            "title": "Node Index",
-            "type": "integer"
-          },
           "enabled": {
-            "description": "true 启用，false 旁通。",
+            "description": "true 启用，false 旁通（bypass）。",
             "title": "Enabled",
             "type": "boolean"
+          },
+          "node_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 1,
+            "description": "节点序号（1 基）。给了 node_label 时忽略。",
+            "title": "Node Index"
+          },
+          "node_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "目标节点标签（推荐）。节点序号在删除节点后会重排，标签才是稳定键。",
+            "title": "Node Label"
           },
           "item_index": {
             "anyOf": [
@@ -2166,7 +2624,6 @@
           }
         },
         "required": [
-          "node_index",
           "enabled"
         ],
         "title": "qing_color_set_node_enabledArguments",
@@ -2177,8 +2634,8 @@
       "name": "qing_fusion_add_tool",
       "title": "添加 Fusion 节点",
       "layer": "Fusion 合成",
-      "summary": "给片段的 Fusion 合成添加一个节点（TextPlus / Transform / ColorCorrector / Merge / Blur 等），可同时写入初始输入值。片段没有合成时会自动新建。",
-      "side_effects": "【副作用】修改片段画面（新增节点并连线到 MediaOut）。属于破坏性写入。\n【触发时机】要加字幕条、角标、水印、简单合成或局部模糊时。\n【自动备份】执行前会 SaveProject() 并 DuplicateTimeline 生成 `[Backup_HHMMSS]_原时间线名`。",
+      "summary": "给片段的 Fusion 合成添加一个节点（TextPlus / Transform / ColorCorrector / Merge / Blur 等），可同时写入初始输入值。片段没有合成时会自动新建。注意：Fusion 界面里只有「恰好选中一个节点」时才把新节点接在其后（手册 p1304/p1307），而脚本 AddTool 新建的节点默认是**未连线**的；未连线的节点不参与输出、画面不会变。connect_to_output=true 会尝试把它接到 MediaOut，但脚本接口对连线的支持随版本而异——返回值里 connected_to_output=false 就说明没接上，需要到 Fusion 页面手动连线（或在已选中单个节点时再试）。",
+      "side_effects": "【副作用】在片段上新增 Fusion 节点并可能改写合成连线（破坏性，可用备份时间线回滚）。\n【触发时机】要加字幕条、角标、水印、简单合成或局部模糊时。\n【自动备份】执行前会 SaveProject() 并 DuplicateTimeline 生成 `[Backup_HHMMSS]_原时间线名`。",
       "annotations": {
         "read_only": false,
         "destructive": true,
@@ -2535,6 +2992,43 @@
       }
     },
     {
+      "name": "qing_deliver_formats",
+      "title": "查询可用渲染格式与分辨率",
+      "layer": "Deliver 交付",
+      "summary": "列出当前工程可用的渲染格式（格式名 → 文件扩展名）、音频格式、以及指定格式下的编码与分辨率。GetRenderCodecs 收的是**文件扩展名**（如 mp4/mov），不是格式名，本工具会自动换算。不同 Resolve 安装可选格式不同，配置渲染前先查一次能少踩很多坑。",
+      "side_effects": "【副作用】只读。\n【触发时机】要指定编码/分辨率，或想确认当前工程到底能出哪些格式时。",
+      "annotations": {
+        "read_only": true,
+        "destructive": false,
+        "idempotent": true
+      },
+      "input_schema": {
+        "properties": {
+          "format_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "要细查的格式名（如 MP4 / QuickTime）；留空只列格式清单与当前选择。",
+            "title": "Format Name"
+          },
+          "include_resolutions": {
+            "default": true,
+            "description": "是否列出该格式（及编码）支持的分辨率。",
+            "title": "Include Resolutions",
+            "type": "boolean"
+          }
+        },
+        "title": "qing_deliver_formatsArguments",
+        "type": "object"
+      }
+    },
+    {
       "name": "qing_deliver_list_presets",
       "title": "列出交付渲染预设",
       "layer": "Deliver 交付",
@@ -2565,6 +3059,373 @@
       "input_schema": {
         "properties": {},
         "title": "qing_deliver_queue_statusArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "qing_deliver_render_settings",
+      "title": "直接写入渲染设置",
+      "layer": "Deliver 交付",
+      "summary": "绕过预设，直接写 Resolve 的 RenderSettings（输出目录/文件名/格式/编码/分辨率/帧率/画质/色彩空间/alpha/字幕/渲染区间/同名文件策略）。只改设置，不入队；写完可用 qing_deliver_setup_job 入队。适合预设覆盖不到的细节（ColorSpaceTag、AlphaMode、UniqueFilenameStyle 这些），或要精确复现某台机器的交付规格。",
+      "side_effects": "【副作用】改写当前工程的渲染设置（影响到之后入队的每个任务），不动时间线内容。\n【触发时机】预设不够用、要精确控制编码/色彩标签/字幕嵌入方式时。",
+      "annotations": {
+        "read_only": false,
+        "destructive": false,
+        "idempotent": false
+      },
+      "input_schema": {
+        "properties": {
+          "target_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "输出目录（绝对路径；不存在会自动创建）。",
+            "title": "Target Dir"
+          },
+          "custom_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "输出文件名（不含扩展名）。",
+            "title": "Custom Name"
+          },
+          "format_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "渲染格式名（见 qing_deliver_formats，如 MP4 / QuickTime）。",
+            "title": "Format Name"
+          },
+          "codec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "编码名（见 qing_deliver_formats 返回的 codecs 值，如 H264）。",
+            "title": "Codec"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "maximum": 16384,
+                "minimum": 16,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "输出宽度（像素）。",
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "maximum": 16384,
+                "minimum": 16,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "输出高度（像素）。",
+            "title": "Height"
+          },
+          "frame_rate": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 240,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "输出帧率（如 24 / 25 / 29.97）。",
+            "title": "Frame Rate"
+          },
+          "video_quality": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "enum": [
+                  "Least",
+                  "Low",
+                  "Medium",
+                  "High",
+                  "Best"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "画质：0 表示按码率自动，或 Least/Low/Medium/High/Best。",
+            "title": "Video Quality"
+          },
+          "export_video": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "是否导出视频。",
+            "title": "Export Video"
+          },
+          "export_audio": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "是否导出音频。",
+            "title": "Export Audio"
+          },
+          "color_space_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "色彩空间标签（如 Rec.709 / Rec.2020 HLG A）。",
+            "title": "Color Space Tag"
+          },
+          "gamma_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Gamma 标签（如 Gamma 2.4 / ST2084）。",
+            "title": "Gamma Tag"
+          },
+          "export_alpha": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "是否带 alpha 通道（仅支持的编码有效）。",
+            "title": "Export Alpha"
+          },
+          "alpha_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "premultiplied",
+                  "straight"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "alpha 模式：premultiplied（预乘）或 straight（直通）。",
+            "title": "Alpha Mode"
+          },
+          "encoding_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "编码 profile（如 High / Main10）。",
+            "title": "Encoding Profile"
+          },
+          "pixel_aspect_ratio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "像素宽高比（如 Square）。",
+            "title": "Pixel Aspect Ratio"
+          },
+          "select_all_frames": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "是否渲染整条时间线（true 会忽略入出点）。",
+            "title": "Select All Frames"
+          },
+          "mark_in": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "渲染入点（帧）。",
+            "title": "Mark In"
+          },
+          "mark_out": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "渲染出点（帧）。",
+            "title": "Mark Out"
+          },
+          "use_unique_filenames": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "同名时是否自动改文件名（防覆盖）。",
+            "title": "Use Unique Filenames"
+          },
+          "unique_filename_style": {
+            "anyOf": [
+              {
+                "enum": [
+                  "prefix",
+                  "suffix"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "自动改名时加前缀还是后缀。",
+            "title": "Unique Filename Style"
+          },
+          "export_subtitle": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "是否导出字幕。",
+            "title": "Export Subtitle"
+          },
+          "subtitle_format": {
+            "anyOf": [
+              {
+                "enum": [
+                  "BurnIn",
+                  "EmbeddedCaptions",
+                  "SeparateFile"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "字幕方式：烧录 / 嵌入字幕轨 / 单独文件。",
+            "title": "Subtitle Format"
+          },
+          "use_full_extents": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "是否渲染完整画面范围（不按空白裁切）。",
+            "title": "Use Full Extents"
+          },
+          "dry_run": {
+            "default": false,
+            "description": "为 true 时只回报将要写入的设置。",
+            "title": "Dry Run",
+            "type": "boolean"
+          }
+        },
+        "title": "qing_deliver_render_settingsArguments",
         "type": "object"
       }
     },
@@ -2689,6 +3550,17 @@
                 "default": null,
                 "description": "字幕嵌入方式（配合 export_subtitle 使用）。",
                 "title": "Subtitle Format"
+              },
+              "on_existing": {
+                "default": "overwrite",
+                "description": "输出目录里已有同名文件时怎么办（Resolve 默认会静默覆盖、不报错）：overwrite 直接覆盖；unique 让 Resolve 自动加后缀另起新名；fail 在入队前就报错停下。",
+                "enum": [
+                  "overwrite",
+                  "unique",
+                  "fail"
+                ],
+                "title": "On Existing",
+                "type": "string"
               }
             },
             "required": [

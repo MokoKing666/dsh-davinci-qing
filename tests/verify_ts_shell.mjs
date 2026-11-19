@@ -44,7 +44,7 @@ await mod.apply(ctx, { env: { QING_DAVINCI_FAKE: '1' }, startupTimeoutMs: 60000 
 
 console.log('注册工具数:', registered.size);
 console.log('日志:', logs.map((l) => l.join(': ')).join(' | '));
-assert.ok(registered.size === 36, `期望 36 个工具，实际 ${registered.size}`);
+assert.ok(registered.size === 43, `期望 43 个工具，实际 ${registered.size}`);
 
 const health = registered.get('qing_resolve_health');
 console.log('\n=== qing_resolve_health 定义 ===');

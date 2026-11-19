@@ -88,9 +88,31 @@ def frames_to_timecode(frames: int, fps: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}:{sub:02d}"
 
 
+def timecode_to_frames(timecode: str, fps: float) -> int:
+    """``HH:MM:SS:FF`` / ``HH:MM:SS;FF``（丢帧写法）→ 帧号。
+
+    只做算术换算，不处理真正的丢帧计数（NDF/DF 差异）；用于把用户口述的时间码
+    落到 ``SetMarkInOut`` 之类只吃帧号的 API 上。
+    """
+
+    raw = (timecode or "").strip().replace(";", ":")
+    if not raw:
+        raise ValueError("时间码为空")
+    parts = raw.split(":")
+    if len(parts) == 3:  # 允许省略小时
+        parts = ["00", *parts]
+    if len(parts) != 4:
+        raise ValueError(f"时间码格式应为 HH:MM:SS:FF，收到：{timecode}")
+    try:
+        hours, minutes, seconds, sub = (int(part) for part in parts)
+    except ValueError as exc:
+        raise ValueError(f"时间码里有非数字段：{timecode}") from exc
+    rate = int(round(fps or 24.0))
+    return ((hours * 60 + minutes) * 60 + seconds) * rate + sub
+
+
 def _bump(name: str, count: int) -> str:
     return name if count == 0 else f"{name} #{count + 1}"
-
 
 # ---------------------------------------------------------------------------
 # 结果封装
@@ -441,6 +463,7 @@ __all__ = [
     "qing_tool",
     "session",
     "temp_dir",
+    "timecode_to_frames",
     "timeline_fps",
     "timestamp_slug",
     "UnsupportedError",

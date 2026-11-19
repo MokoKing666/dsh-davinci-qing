@@ -429,7 +429,10 @@ def resolve_checkpoint(
     elif not duplicate_supported:
         warnings.append("当前 Resolve 版本没有 Timeline.DuplicateTimeline，跳过备份时间线。")
     else:
-        for attempt in range(3):
+        # 同一秒内可能连着做多次检查点（批量操作、自动化链路），
+        # 名字冲突时 `_backup_name` 会加 _2/_3… 后缀；给足尝试次数，
+        # 最后几轮还跨过秒边界，避免同一秒的批量操作把护栏自己卡死。
+        for attempt in range(12):
             candidate = _backup_name(original_name, attempt=attempt)
             try:
                 created = timeline.DuplicateTimeline(candidate)
@@ -439,8 +442,8 @@ def resolve_checkpoint(
             if created is not None:
                 backup_name = candidate
                 break
-            # 名字冲突是最常见的失败原因；换一个后缀重试
-            time.sleep(0.2 * (attempt + 1))
+            # 名字冲突是最常见的失败原因；换一个后缀重试，并让时间往前走
+            time.sleep(min(0.1 * (attempt + 1), 0.6))
 
     # 3) 把界面切回原时间线，别让用户莫名其妙看到备份
     if backup_name and original_name:
