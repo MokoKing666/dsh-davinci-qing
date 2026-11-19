@@ -777,7 +777,7 @@
 - 【触发时机】发现预设/输出目录设错需要立即止损时。
 
 
-## 其它
+## 官方 MCP 层
 
 ### `qing_official_delete_lut_file` — 删除 LUT / DCTL 文件 ⚠️
 

@@ -3,7 +3,7 @@ name: davinci-qing
 description: 用自然语言驱动 DaVinci Resolve Studio 剪辑、调色、合成与交付。当用户要求操作 Resolve 工程（导入素材、建时间线、落片、改片段属性、打标记、导入字幕）、调色（节点树、LUT、.drx 预设、复制调色、看画面）、Fusion 文字/节点、或交付渲染（预设、队列、开跑）时加载。也用于诊断"连不上 Resolve""脚本接口没反应""这个工具报了 resolve_not_connected"这类环境问题。
 whenToUse: 用户提到 DaVinci Resolve / 达芬奇 / 调色 / 时间线 / 媒体池 / 渲染交付 / LUT / PowerGrade / Fusion 文字，或要求"帮我把这段素材剪一下""让这段画面变暖一点""出个 H.264 母版"。
 metadata:
-  version: "1.0.3"
+  version: "1.0.4"
   plugin: dsh-davinci-qing
   tool-prefix: qing_
   slogan: 让青青住进你的dsh
@@ -53,7 +53,7 @@ TS 侧**不重复实现业务逻辑**——工具 schema 全部来自 Python，�
 
 破坏性工具都支持 `dry_run: true` 与 `allow_without_backup`（默认 false，备份失败即拒绝执行——不要为了"让它过"就随便打开）。
 
-## 三、五条常用工作流
+## 三、六条常用工作流
 
 ### 1. 素材入库 → 分箱 → 上时间线
 

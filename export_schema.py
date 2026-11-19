@@ -44,6 +44,7 @@ LAYERS = {
     "qing_color_": ("Color 调色", 3),
     "qing_fusion_": ("Fusion 合成", 4),
     "qing_deliver_": ("Deliver 交付", 5),
+    "qing_official_": ("官方 MCP 层", 6),
 }
 
 
