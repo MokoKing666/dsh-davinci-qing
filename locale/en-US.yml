@@ -7,10 +7,11 @@
 meta:
   title: Happy Qingqing
   description: >-
-    Connects DeepSeek Harness to DaVinci Resolve Studio: 43 tools for environment
+    Connects DeepSeek Harness to DaVinci Resolve Studio: 62 tools for environment
     checks, media archiving, timeline editing, color nodes with LUT/DRX, Fusion
-    comps, and the Deliver queue. Bulk writes save the project and duplicate the
-    timeline first.
+    comps, and the Deliver queue, plus full inheritance of the official Resolve
+    MCP's 18 capabilities. Bulk writes save the project and duplicate the timeline
+    first.
   detail: docs/DETAIL.md
 
 config:
@@ -74,3 +75,22 @@ tools:
   qing_deliver_start: Start rendering
   qing_deliver_stop: Stop rendering
   qing_deliver_delete_jobs: Remove render queue jobs
+  qing_official_tools: "List official MCP capabilities"
+  qing_official_launch_resolve: "Launch Resolve"
+  qing_official_status: "Official MCP status"
+  qing_official_whats_new: "Resolve changelog"
+  qing_official_scripting_api: "Fetch scripting API stubs"
+  qing_official_search_api: "Search the scripting API"
+  qing_official_scripting_docs: "Fetch developer docs"
+  qing_official_run_script: "Run a sandboxed script"
+  qing_official_run_script_unsafe: "Run a script (full system access)"
+  qing_official_list_luts: "List LUTs / DCTLs"
+  qing_official_read_dctl: "Read DCTL source"
+  qing_official_write_dctl: "Write a DCTL"
+  qing_official_delete_lut_file: "Delete a LUT / DCTL file"
+  qing_official_generate_lut: "Generate a .cube from a function"
+  qing_official_list_extras: "List Extras packages"
+  qing_official_install_extras: "Download and install Extras"
+  qing_official_describe_grade: "Describe the actual grade"
+  qing_official_get_image: "Render a single frame"
+  qing_official_get_thumbnails: "Render a thumbnail grid"

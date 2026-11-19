@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""全工具冒烟测试：对 43 个工具各打一次最小调用，确保没有"未预期崩溃"。
+"""全工具冒烟测试：对 62 个工具各打一次最小调用，确保没有"未预期崩溃"。
 
 判定标准：
 * ``ok=true``            → 工具正常工作；
@@ -106,6 +106,27 @@ CASES: list[tuple[str, dict]] = [
     ("qing_deliver_start", {"wait_seconds": 0}),
     ("qing_deliver_stop", {}),
     ("qing_deliver_delete_jobs", {}),
+    # --- 官方 MCP 层（19 个）：模拟器下全部预期 official_mcp_unavailable ---
+    # 这条红线保证模拟测试绝不会读到用户真实工程；真实环境下的验证见 README。
+    ("qing_official_tools", {}),
+    ("qing_official_launch_resolve", {}),
+    ("qing_official_status", {}),
+    ("qing_official_whats_new", {"since": "19.0"}),
+    ("qing_official_scripting_api", {"api": "DaVinciResolveScript.pyi", "outline": True}),
+    ("qing_official_search_api", {"pattern": "marker"}),
+    ("qing_official_scripting_docs", {"document": "README.md", "section": "TOC"}),
+    ("qing_official_run_script", {"script": "result = 1"}),
+    ("qing_official_run_script_unsafe", {"script": "result = 1"}),
+    ("qing_official_list_luts", {"kind": "all"}),
+    ("qing_official_read_dctl", {"path": "MCP/x.dctl"}),
+    ("qing_official_write_dctl", {"path": "x.dctl", "content": "__DEVICE__ float3 t(float3 c){return c;}"}),
+    ("qing_official_delete_lut_file", {"path": "x.cube"}),
+    ("qing_official_generate_lut", {"path": "x.cube", "size": 17, "transform": "return r, g, b"}),
+    ("qing_official_list_extras", {}),
+    ("qing_official_install_extras", {"names": ["AI Slate ID"]}),
+    ("qing_official_describe_grade", {"source": "timeline_item"}),
+    ("qing_official_get_image", {"source": "timeline"}),
+    ("qing_official_get_thumbnails", {"source": "timeline", "count": 4}),
 ]
 
 

@@ -20,9 +20,10 @@ user-invocable: true
 
 | 层 | 位置 | 职责 |
 | --- | --- | --- |
-| Cordis 入口 | `dist/index.js`（源码 `src/index.ts`） | 注册 43 个工具、托管 Python 子进程 |
+| Cordis 入口 | `dist/index.js`（源码 `src/index.ts`） | 注册 62 个工具、托管 Python 子进程 |
 | Python 桥 | `lib/resolve_bridge.py` | 常驻 JSON-RPC，转发工具调用 |
 | 业务模块 | `lib/modules/` | IPC 连接、安全护栏、媒体池、时间线、调色、Fusion/交付 |
+| 官方 MCP 层 | `lib/modules/official_tools.py` | 完整继承官方 Resolve MCP 的 18 项能力 |
 | 技能声明 | `SKILL.md`（本文件） | 触发条件、工作流、故障排查 |
 
 TS 侧**不重复实现业务逻辑**——工具 schema 全部来自 Python，因此两边永不漂移。
@@ -47,6 +48,8 @@ TS 侧**不重复实现业务逻辑**——工具 schema 全部来自 Python，�
 | 写盘（不改进度） | `qing_timeline_export` `qing_media_export_metadata` `qing_color_grab_frame` | 在磁盘上生成文件；同名文件会被覆盖（返回值里有 `overwritten`） |
 | 破坏性 + 自动检查点 | `qing_media_auto_bin` `qing_timeline_set_clip_properties` `qing_timeline_delete_clips` `qing_timeline_delete_markers` `qing_color_set_lut` `qing_color_set_node_enabled` `qing_color_label_nodes` `qing_color_copy_grade` `qing_color_apply_drx` `qing_fusion_add_tool` `qing_fusion_set_input` | 覆盖既有内容；先 `SaveProject` + 复制 `[Backup_HHMMSS]_原时间线名` |
 | 触发外部重活 | `qing_deliver_start` `qing_deliver_stop` `qing_deliver_delete_jobs` | 真实渲染，耗时不可控 |
+| 官方 MCP 只读 | `qing_official_tools` `qing_official_status` `qing_official_whats_new` `qing_official_scripting_api` `qing_official_search_api` `qing_official_scripting_docs` `qing_official_list_luts` `qing_official_read_dctl` `qing_official_list_extras` `qing_official_describe_grade` `qing_official_get_image` `qing_official_get_thumbnails` | 无写入（会起一个官方子进程，约 0.1 秒） |
+| 官方 MCP 写盘 / 改工程 | `qing_official_launch_resolve` `qing_official_write_dctl` `qing_official_delete_lut_file` `qing_official_generate_lut` `qing_official_install_extras` `qing_official_run_script` `qing_official_run_script_unsafe` | **不建检查点**；后两者可执行任意代码，调前必须让用户知情 |
 
 破坏性工具都支持 `dry_run: true` 与 `allow_without_backup`（默认 false，备份失败即拒绝执行——不要为了"让它过"就随便打开）。
 
@@ -90,6 +93,33 @@ qing_color_grab_frame(tag="after_tweak")                    # 再取一张对比
 这两项**失败不会让主流程失败**：`grade_detail.available=false` 或
 `official_mcp_unavailable` 只说明官方 MCP 不可用（版本低于 21.1、没装 Studio、
 或正在模拟器模式），基础能力照常。`qing_resolve_health` 会报告官方 MCP 是否可用。
+
+### 2b. 官方 MCP 层（19 个工具，能力更强但需 Studio 21.1+）
+
+官方 MCP 是与脚本 API **并行**的另一条通道，能提供脚本 API 结构上拿不到的东西。
+**能用现成的 `qing_*` 工具就别用官方层**；官方层是给"现成工具做不到"的情况兜底的。
+
+| 场景 | 用哪个 | 为什么比脚本 API 强 |
+| --- | --- | --- |
+| 读调色**实际**改了什么 | `qing_official_describe_grade` | 脚本只能读到"节点里有 HSL Qualifier"，读不到"Blur 半径被改成 12.5"；调过色还给 ASC CDL 等效值 |
+| 看任意一帧 / **局部放大** | `qing_official_get_image` | 可指定 timecode **不动播放头**；`roi_*` 真的换来细节（区域按 max_dimension 渲染） |
+| 扫整条时间线调性 | `qing_official_get_thumbnails` | N 帧一张网格，带标注；比逐帧导快一个数量级 |
+| 查 API 存不存在/签名 | `qing_official_search_api` | 实时读本机 `.pyi` 存根，比模型记忆可靠 |
+| 查设置字典的键、枚举取值 | `qing_official_scripting_docs` | 存根里没有的细节都在 README.md 里 |
+| 脚本 API 有、插件没封装的操作 | `qing_official_run_script` | 沙箱 Python，`resolve`/`project` 已注入；**不能读写文件** |
+| 需要文件/网络/子进程 | `qing_official_run_script_unsafe` | 完全权限，**风险最高**，调前必须让用户明确同意 |
+| 按函数生成 LUT | `qing_official_generate_lut` | 给一个 `(r,g,b)→(r,g,b)` 的 Python 函数，直接出 .cube |
+| 写/读/删 DCTL | `qing_official_write_dctl` 等 | DCTL 比 .cube 省空间且可带逻辑 |
+| 确认 Resolve 活着 | `qing_official_status` | 比 `qing_resolve_health` 轻，不加载脚本 API |
+
+**官方层的两条纪律**：
+1. **`run_script` / `run_script_unsafe` 不建检查点**，绕过本插件的四重护栏。
+   改工程前先让用户确认，或用 `qing_color_copy_grade` 那类带检查点的工具做备份。
+2. `install_extras_package` 可能下载**几个 GiB**——调前必须问用户。
+
+官方层不可用时（非 Studio / 版本低于 21.1 / 模拟器模式）会统一报
+`official_mcp_unavailable` 并给出中文排查步骤；`qing_official_tools` 能列出本机
+官方 MCP 到底提供哪些工具（官方升级后会变多，用它查准）。
 
 ### 3. 标记与字幕
 
@@ -152,6 +182,9 @@ qing_timeline_export("D:/cut.aaf", export_type="aaf")       # 交给别的剪辑
   Lavender / Sky / Mint / Lemon / Sand / Cocoa / Cream。"全部颜色"在 Resolve 里是首字母
   大写的 `All`；标记时间是**相对片段或时间线**的帧，不是工程帧。
 - **gradeMode**（`qing_color_apply_drx`）：0 无关键帧 / 1 按源时间码 / 2 按起始帧。
+- **官方层两个来源枚举**：`describe_grade` 的 `source` 是 `timeline_item`/`timeline`/`photo`
+  （节点图层级）；`get_image`/`get_thumbnails` 的 `source` 是
+  `timeline`/`timeline_item`/`media_pool_clip`/`photo`（渲染对象）。别混用。
 
 ## 五、故障速查
 
@@ -165,7 +198,7 @@ qing_timeline_export("D:/cut.aaf", export_type="aaf")       # 交给别的剪辑
 | `node_label_not_found` | 该片段上没有这个标签的节点；先 `qing_color_inspect_nodes` 看现有标签（注意每个片段的节点树可能不同） |
 | `output_exists` | 目标目录已有同名渲染结果；换文件名或把 `on_existing` 设成 `"unique"` |
 | `backup_failed` | 备份建不出来（协作锁定/只读）。修好后重试；**不要**默认开 `allow_without_backup` |
-| `official_mcp_unavailable` | 官方 MCP 不可用（需要 Resolve Studio 21.1+、且不在模拟器模式）。去掉 `include_grade_detail` / `grid_count` 用基础能力即可 |
+| `official_mcp_unavailable` | 官方 MCP 不可用（需要 Resolve Studio 21.1+、且不在模拟器模式）。基础工具照常可用；想用官方层就装 Studio 21.1+ 并确认 `ResolveMCP.exe` 存在 |
 | `unsupported` | 当前版本没有该 API（v19 以下没有 `GetNodeGraph`），按 `hint` 里的替代方案做 |
 | `api_failure` | 参数被 Resolve 拒绝；先 `qing_*_inspect` 读实际状态再改 |
 | `bridge_failure` | Python 桥断了；调一次 `qing_resolve_health`，仍失败就重启 DSH 让插件重拉 Python |
@@ -179,7 +212,10 @@ qing_timeline_export("D:/cut.aaf", export_type="aaf")       # 交给别的剪辑
   没有"只改某一个参数"的接口。覆盖率有风险时先复制一份时间线再动手。
 - 脚本 API **没有**限定器/窗口/跟踪的接口，也没有 Fusion 连线接口——这类操作只能
   让用户在 Resolve 界面里完成，别假装能做。
-- 官方 MCP（Resolve 21.1+）只借用 `describe_grade` / `get_thumbnails` / `get_image` 三项；
-  `run_script` / `run_script_unsafe` **刻意不接**——它们能执行任意代码，会绕过四重护栏。
+- 官方 MCP（Resolve 21.1+）已完整继承 18 项能力（`qing_official_*`，共 19 个工具）。
+  **`qing_official_run_script` / `run_script_unsafe` 不建检查点**——它们绕过四重护栏，
+  改工程前必须让用户知情；`run_script_unsafe` 还能读写任意文件、访问网络、起子进程。
+- 官方 MCP 在模拟器模式（`QING_DAVINCI_FAKE=1`）下**完全禁用**：模拟模式承诺不碰真实
+  Resolve，而官方 MCP 会直接跟真实实例说话。这条由 `tests/audit_features.py` 第 6 项守着。
 - 详细参数表见 `docs/TOOLS.md`；同源 JSON Schema 见 `docs/tool-schemas.json`。
 - 手册依据（页码对应《DaVinci Resolve 21.1 Reference Manual》）见 `docs/manual-notes/`。

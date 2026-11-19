@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "快乐青青",
-    "description": "把 DeepSeek Harness 连到 DaVinci Resolve Studio：43 个工具覆盖环境自检、媒体归档、时间线剪辑、调色节点与 LUT/DRX、Fusion 合成、Deliver 渲染队列。批量写入前自动保存工程并复制备份时间线。",
+    "description": "把 DeepSeek Harness 连到 DaVinci Resolve Studio：62 个工具覆盖环境自检、媒体归档、时间线剪辑、调色节点与 LUT/DRX、Fusion 合成、Deliver 渲染队列，并完整继承官方 Resolve MCP 的 18 项能力。批量写入前自动保存工程并复制备份时间线。",
     "detail": "docs/DETAIL.md"
   },
   "config": {
@@ -69,6 +69,25 @@
     "qing_deliver_queue_status": "查询交付队列状态",
     "qing_deliver_start": "开始渲染",
     "qing_deliver_stop": "停止渲染",
-    "qing_deliver_delete_jobs": "删除队列任务"
+    "qing_deliver_delete_jobs": "删除队列任务",
+    "qing_official_tools": "列出官方 MCP 能力",
+    "qing_official_launch_resolve": "启动 Resolve",
+    "qing_official_status": "官方 MCP 状态",
+    "qing_official_whats_new": "Resolve 更新日志",
+    "qing_official_scripting_api": "取脚本 API 存根",
+    "qing_official_search_api": "搜脚本 API",
+    "qing_official_scripting_docs": "取开发者文档",
+    "qing_official_run_script": "运行沙箱脚本",
+    "qing_official_run_script_unsafe": "运行脚本（完全系统权限）",
+    "qing_official_list_luts": "列出 LUT / DCTL",
+    "qing_official_read_dctl": "读 DCTL 源码",
+    "qing_official_write_dctl": "写 DCTL",
+    "qing_official_delete_lut_file": "删除 LUT / DCTL 文件",
+    "qing_official_generate_lut": "按函数生成 .cube",
+    "qing_official_list_extras": "列出 Extras 包",
+    "qing_official_install_extras": "下载安装 Extras 包",
+    "qing_official_describe_grade": "读调色实际内容",
+    "qing_official_get_image": "渲染单帧画面",
+    "qing_official_get_thumbnails": "渲染缩略图网格"
   }
 }

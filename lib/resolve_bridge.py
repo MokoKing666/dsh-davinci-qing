@@ -124,6 +124,7 @@ def _build_registry(use_mcp_sdk: bool = True) -> tuple[_CollectingServer, Any | 
     from lib.modules.color_tools import register as register_color
     from lib.modules.fusion_deliver_tools import register as register_fusion_deliver
     from lib.modules.media_pool_tools import register as register_media_pool
+    from lib.modules.official_tools import register as register_official
     from lib.modules.resolve_tools import register as register_resolve
     from lib.modules.timeline_tools import register as register_timeline
 
@@ -132,6 +133,7 @@ def _build_registry(use_mcp_sdk: bool = True) -> tuple[_CollectingServer, Any | 
     register_timeline(collector)
     register_color(collector)
     register_fusion_deliver(collector)
+    register_official(collector)
 
     if use_mcp_sdk:
         _REGISTRY_CACHE = (collector, mcp_server)

@@ -7,8 +7,8 @@
 ## 这个插件做什么
 
 它是一个 **Cordis 插件壳 + 本地 Python 运行时**：DSH 加载 `dist/index.js`，插件从 stdio 拉起
-`lib/resolve_bridge.py --serve` 常驻进程，把 **43 个 `qing_*` 工具**注册成模型可直接调用的能力，
-覆盖六大模块：
+`lib/resolve_bridge.py --serve` 常驻进程，把 **62 个 `qing_*` 工具**注册成模型可直接调用的能力，
+覆盖七大模块：
 
 | 模块 | 工具前缀 | 能力 |
 | --- | --- | --- |
@@ -18,6 +18,12 @@
 | Color 调色 | `qing_color_*` | 节点树解析、节点**标签与颜色**寻址、`SetLUT` 挂载、节点启用/旁通、跨片段 `CopyGrades`、`.drx` PowerGrade 批量应用、导出当前帧 + 像素统计给多模态审片 |
 | Fusion 合成 | `qing_fusion_*` | 取 `FusionComp`、添加 `TextPlus`/`Transform`/`ColorCorrector` 等节点、改文本与数值，并明确回报**是否已连到 MediaOut** |
 | Deliver 交付 | `qing_deliver_*` | 格式/编码/分辨率探测、渲染预设列表与加载、输出目录与文件名、**全量 RenderSettings 直写**、防覆盖策略、`AddRenderJob`、队列状态、启动与停止 |
+| 官方 MCP 层 | `qing_official_*` | **完整继承官方 Resolve MCP 的 18 项能力**：读调色实际参数与 ASC CDL、渲染单帧（支持 ROI 局部放大）与缩略图网格、实时 API 存根检索与开发者文档、沙箱/不限权脚本执行、LUT/DCTL 读写与按函数生成 .cube、Extras 下载管理器、启动与状态 |
+
+官方 MCP 层是与脚本 API **并行**的另一条通道（需要 Resolve Studio 21.1+）。
+它能提供脚本 API 结构上拿不到的东西——例如「节点里 Blur 半径被改成了 12.5」
+（脚本只能读到「节点里有 Blur」）。不可用时该层工具统一报 `official_mcp_unavailable`，
+其余 43 个工具照常工作。
 
 ## 怎么开始
 
@@ -54,12 +60,15 @@
 - **Fusion 连线无法用脚本完成**：`AddTool` 新建的节点默认未连线，未连线不参与输出；工具会在返回值里标明 `connected_to_output`。
 - **SRT 字幕**优先走 `Timeline.ImportIntoTimeline`（v18.5+）；不支持时退化为 Fusion 文本片段（放在视频轨上，不是可编辑字幕条目），结果里会明确标出 `method`。
 - **截图不是示波器**：`qing_color_grab_frame` 返回的是 8 位显示参考图，附带的像素统计只用于方向性判断，不能当 IRE / 0–1023 读数。
-- **官方 MCP 增强是可选项**：`qing_color_inspect_nodes(include_grade_detail=true)` 与
-  `qing_color_grab_frame(grid_count=N)` 借用 Resolve Studio 21.1+ 随附的官方 MCP
-  （`ResolveMCP.exe`），补齐脚本 API 结构上拿不到的两件事：色彩管理实际取值 / 调过色节点的
-  ASC CDL 等效值，以及一次覆盖整条时间线的缩略图网格。它不可用时（版本不够、非 Studio、
-  或正在模拟器模式）只让**该项增强**跳过并说明原因，基础能力不受影响。
-  `run_script` / `run_script_unsafe` 刻意不接——它们能执行任意代码，会绕过四重护栏。
+- **官方 MCP 层是完整继承，不是可选项**：`qing_official_*` 共 19 个工具，覆盖官方
+  Resolve MCP 的全部 18 项能力（`qing_official_tools` 是能力清单）。它需要 Resolve
+  Studio 21.1+ 随附的 `ResolveMCP.exe`；不可用时（版本不够、非 Studio、或正在模拟器
+  模式）该层统一报 `official_mcp_unavailable`，其余 43 个工具不受影响。
+- **官方层里两个脚本工具不建检查点**：`qing_official_run_script`（沙箱，屏蔽文件/网络/
+  子进程）与 `qing_official_run_script_unsafe`（完全权限）都能改工程，且**绕过四重护栏**。
+  调用前必须让用户明确知情；需要备份时先用带检查点的工具。
+- **官方 MCP 在模拟器模式下完全禁用**：`QING_DAVINCI_FAKE=1` 承诺不碰真实 Resolve，
+  而官方 MCP 会直接跟真实实例说话。`tests/audit_features.py` 第 6 项守着这条红线。
 - Resolve 没有"撤销栈"可供脚本回滚，所以回滚手段只有备份时间线。
 - `ExportCurrentFrameAsStill` 需要界面停在调色页且有播放头所在片段，否则返回空文件；工具会自动切页仍失败时会给出排查提示。
 
@@ -67,8 +76,8 @@
 
 - `dist/` 与 `src/` —— Cordis 插件壳（`src/index.ts` 注册工具、托管 Python 子进程）
 - `lib/resolve_bridge.py` —— 常驻 JSON-RPC 桥；`lib/server.py` —— 独立 MCP 服务端
-- `lib/modules/` —— 业务模块（`resolve_connector.py`、`safety_guard.py`、`media_pool_tools.py`、`timeline_tools.py`、`color_tools.py`、`fusion_deliver_tools.py`、`official_mcp.py`、`fake_resolve.py` 等）
-- `docs/TOOLS.md` —— 43 个工具的参数表与副作用说明（由 `export_schema.py` 生成）
+- `lib/modules/` —— 业务模块（`resolve_connector.py`、`safety_guard.py`、`media_pool_tools.py`、`timeline_tools.py`、`color_tools.py`、`fusion_deliver_tools.py`、`official_mcp.py`、`official_tools.py`、`fake_resolve.py` 等）
+- `docs/TOOLS.md` —— 62 个工具的参数表与副作用说明（由 `export_schema.py` 生成）
 - `docs/tool-schemas.json` —— 同源的 JSON Schema
 - `docs/manual-notes/` —— 按《DaVinci Resolve 21.1 Reference Manual》整理的知识笔记（带页码）
 - `SKILL.md` —— DSH 技能声明（触发时机与工作流）

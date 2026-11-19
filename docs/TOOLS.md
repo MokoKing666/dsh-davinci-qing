@@ -1,8 +1,8 @@
-# dsh-davinci-qing 工具目录（v1.0.2）
+# dsh-davinci-qing 工具目录（v1.0.4）
 
 > 让青青住进你的dsh
 
-共 **43** 个 MCP 工具。本文档由 `export_schema.py` 自动生成，请勿手工编辑；参数表与 JSON Schema 同源。
+共 **62** 个 MCP 工具。本文档由 `export_schema.py` 自动生成，请勿手工编辑；参数表与 JSON Schema 同源。
 
 图例：🔍 只读 · ⚠️ 破坏性（会改动工程内容） · 💾 自动检查点（执行前 SaveProject + 复制时间线）
 
@@ -775,4 +775,251 @@
 
 - 【副作用】中断渲染，已写出的文件可能不完整。
 - 【触发时机】发现预设/输出目录设错需要立即止损时。
+
+
+## 其它
+
+### `qing_official_delete_lut_file` — 删除 LUT / DCTL 文件 ⚠️
+
+从 MCP LUT 目录删除一个 LUT 或 DCTL 文件（按扩展名区分）。`path` 是文件名，如 "warm.cube" 或 "cool.dctl"。**只删 MCP LUT 目录里的文件**，不动用户的其它 LUT。
+
+- 【副作用】删除磁盘文件（不可撤销；已挂该 LUT 的节点会失效）。
+- 【触发时机】清理自己生成的 LUT/DCTL、或换掉一个不再需要的变换时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `path` | string | 是 | 文件名，如 "warm.cube" 或 "cool.dctl"。 |
+
+### `qing_official_describe_grade` — 读调色实际内容 🔍
+
+返回一个 grade 里**节点实际装了什么**，让「这个 look 长什么样」可以靠读而不是靠渲染对比来回答。每个节点报告：用到的工具（挂的 LUT、OFX 插件、每一组偏离默认值的参数）、节点标签与色标、启用状态；调过色时还给出 ASC CDL 等效值；并附当前色彩管理设置。
+
+**这是脚本 API 结构上拿不到的东西**：脚本只能读到「节点里有 HSL Qualifier」，读不到「Blur 半径被改成了 12.5」。`source` 选片段级 / 时间线级 / 照片页；`timecode`+`track` 可以指向别的片段。
+
+- 【副作用】只读；会起一个官方 MCP 子进程再关闭。
+- 【触发时机】接手别人的调色、要复刻某个 look、或想确认「到底改了哪些参数」时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `source` | enum | 否 | 描述哪一层节点图（默认播放头所在片段）。（默认 'timeline_item'） |
+| `layer` | integer | 否 | 节点堆叠层号（1 基，默认第一层）。只对 timeline_item / photo 有效。 |
+| `timecode` | string | 否 | 时间线时间码 HH:MM:SS:FF，用来指向别的片段；留空取播放头所在片段。 |
+| `track` | integer | 否 | 视频轨道号（1 基，从下往上数，V1 在最下）。默认最上层轨道。 |
+
+### `qing_official_generate_lut` — 按函数生成 .cube
+
+用一个 Python 变换函数在立方体格点上逐点求值，生成 .cube 3D LUT，写到 MCP LUT 目录。`transform` 是**函数体**：接收 r/g/b（[0,1] 浮点，编码取决于节点所在位置），必须返回 (r, g, b)。返回里会列出当前生效的色彩管理设置，便于判断该在哪编码下计算。
+
+典型用法：`r*0.9, g*0.95, b*1.05` 做轻微色偏；或 `r**0.9` 提亮中间调。
+
+- 【副作用】在 MCP LUT 目录生成一个 .cube 文件（覆盖同名文件）。
+- 【触发时机】需要一个精确的数学变换（色偏、Gamma、通道混合），而现成 LUT 都不合适时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `path` | string | 是 | .cube 文件名，如 "warm.cube"。 |
+| `size` | integer | 是 | 每轴格点数（17 / 33 / 65 最常见）。 |
+| `transform` | string | 是 | Python 函数体：接收 r, g, b，返回 (r, g, b)。 |
+
+### `qing_official_get_image` — 渲染单帧画面 🔍
+
+渲染一帧画面并返回图像 + 基本 grade 与色彩科学信息。**画面已完整调色与色彩管理，但不含显示 LUT**。超过 `max_dimension` 会自动缩小（默认 1024，上限 4096）。
+
+比本插件的 `qing_color_grab_frame` 强的地方：① 可以指定任意 `timecode` / `frame_offset`，**不移动播放头**；② `source` 可选整条时间线合成 / 单个片段 / 媒体池素材 / 照片页；③ 支持 `roi_*` **局部放大**——区域按 `max_dimension` 渲染，裁切真的换来细节，适合检查高光、噪点、边缘这类小范围问题。
+
+- 【副作用】只读；会起一个官方 MCP 子进程、渲染一帧并写一个图片文件到临时目录。
+- 【触发时机】要看某一帧的确切画面、或需要局部放大看细节时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `source` | enum | 否 | 渲染什么（默认整条时间线合成）。（默认 'timeline'） |
+| `timecode` | string | 否 | 时间线时间码 HH:MM:SS:FF；留空取播放头位置。只对 source=timeline 有效。 |
+| `frame_offset` | integer | 否 | 相对源起点的 0 基帧偏移（source=timeline 时是 timecode 的替代）。 |
+| `clip_name` | string | 否 | 只对 source=media_pool_clip 有效：素材名。 |
+| `max_dimension` | integer | 否 | 长边像素上限（默认 1024，上限 4096）。（默认 1024） |
+| `roi_x` | number | 否 | 区域左边界（占画面宽度的比例，默认 0）。 |
+| `roi_y` | number | 否 | 区域上边界（占画面高度的比例，默认 0）。 |
+| `roi_width` | number | 否 | 区域宽度（占画面宽度的比例，默认 1 = 全宽）。 |
+| `roi_height` | number | 否 | 区域高度（占画面高度的比例，默认 1 = 全高）。 |
+| `out_dir` | string | 否 | 图片保存目录；留空用插件临时目录。 |
+| `tag` | string | 否 | 文件名标签，便于区分多张图（如 "before_lut"）。（默认 'official_frame'） |
+
+### `qing_official_get_thumbnails` — 渲染缩略图网格 🔍
+
+把一个源的 N 帧排成**一张网格图**返回。每格有标注（时间码或片段内帧偏移），想看某一格的全尺寸再调 `qing_official_get_image`。问「这个片段/这条时间线整体什么样」用这个；问「这一帧长什么样」用 `qing_official_get_image`。
+
+`count` 默认 12（1–48）。网格整体受 `max_dimension` 限制，格数越多每格越小。`start`/`end` 可用帧偏移或时间码（source=timeline 时）限定区间，中间帧均匀分布。
+
+- 【副作用】只读；会起一个官方 MCP 子进程、渲染 N 帧并写一张网格图到临时目录。
+- 【触发时机】要快速扫一遍整条时间线/一个片段的调性，而不是盯某一帧时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `source` | enum | 否 | 采样什么（默认整条时间线合成）。（默认 'timeline'） |
+| `count` | integer | 否 | 显示多少帧（1–48，默认 12）。（默认 12） |
+| `start` | integer | 否 | 区间起点：0 基帧偏移，或时间码 "HH:MM:SS:FF"（source=timeline 时）。留空取源起点。 |
+| `end` | integer | 否 | 区间终点，形式同 start。留空取源终点。 |
+| `clip_name` | string | 否 | 只对 source=media_pool_clip 有效：素材名。 |
+| `max_dimension` | integer | 否 | 整张网格的长边像素上限（不是单格；默认 1568，上限 4096）。（默认 1568） |
+| `out_dir` | string | 否 | 图片保存目录；留空用插件临时目录。 |
+| `tag` | string | 否 | 文件名标签。（默认 'official_grid'） |
+
+### `qing_official_install_extras` — 下载安装 Extras 包
+
+排队下载并安装「Extras 下载管理器」包。`names` 必须与 `qing_official_list_extras` 报告的名字**完全一致**（如 ["AI Slate ID"]）。安装是异步的，用 `qing_official_list_extras` 轮询状态。
+
+**下载量可能有几个 GiB**：调用前必须让用户明确同意。
+
+- 【副作用】从网上下载并安装可选包（可能数 GiB、耗时很长），会改变 Resolve 的安装内容。
+- 【触发时机】用户明确要求安装某个可选包，且已知道体积与耗时之后。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `names` | string[] | 是 | Extras 包名列表，必须与 list_extras 报告的一致。 |
+
+### `qing_official_launch_resolve` — 启动 Resolve
+
+启动 DaVinci Resolve 并等它就绪（官方实现超时 60 秒）。本插件的其他工具都要求 Resolve 已在运行；当 `qing_resolve_health` 报 `resolve_not_connected` 且用户希望由脚本启动时用这个。已经启动时不会有副作用。
+
+- 【副作用】启动一个 GUI 应用（Resolve 会出现在屏幕上，加载可能要几十秒）。
+- 【触发时机】Resolve 没在运行，而用户要求开始干活、不想自己点图标时。
+
+### `qing_official_list_extras` — 列出 Extras 包 🔍
+
+列出当前 Resolve 版本可用的「Extras 下载管理器」包及其安装状态。这些是可选包（多数是 AI 模型），某些脚本 API 调用需要它们才能工作。**装之前先问用户**：下载量可能有好几个 GiB。
+
+- 【副作用】只读；会起一个官方 MCP 子进程再关闭。
+- 【触发时机】某个脚本 API 报缺少模型、或想看看有哪些可选能力时。
+
+### `qing_official_list_luts` — 列出 LUT / DCTL 🔍
+
+递归列出全局 LUTs 目录里的 LUT 与 DCTL 文件。`kind` 过滤：`lut`（.3dl/.cube/.dat/.lut/.olut）、`dctl`（.dctl）、`all`（两者）。想给片段挂某个 LUT 但不确定确切文件名/相对路径时先列一下。
+
+- 【副作用】只读；会起一个官方 MCP 子进程再关闭。
+- 【触发时机】挂 LUT 前确认文件名、或排查「明明装了 LUT 却找不到」时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `kind` | enum | 否 | 列出哪类文件（默认 all）。（默认 'all'） |
+
+### `qing_official_read_dctl` — 读 DCTL 源码 🔍
+
+返回全局 LUTs 目录里某个 .dctl 文件的源码。`path` 是**相对 LUTs 目录**的路径，如 "MCP/cool.dctl"（先用 `qing_official_list_luts(kind="dctl")` 拿到确切名字）。
+
+- 【副作用】只读；会起一个官方 MCP 子进程再关闭。
+- 【触发时机】要改一个已有 DCTL、或想参考它的写法时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `path` | string | 是 | 相对全局 LUTs 目录的路径，如 "MCP/cool.dctl"。 |
+
+### `qing_official_run_script` — 运行沙箱脚本 ⚠️
+
+在**沙箱化** Python 3.14 里执行一段脚本，`resolve` 与 `project` 已预注入，用 `result = {...}` 返回结构化数据，`print()` 的内容走 `output` 字段。沙箱屏蔽文件系统、网络与子进程（`os`/`sys`/`pathlib`/`shutil` 不可用），所以它**不能**用来读写本地文件——那类需求走本插件自己的工具。
+
+用途：脚本 API 里有、而本插件还没封装成工具的操作；或一次性批量计算。写脚本前先用 `qing_official_search_api` 确认签名。
+
+**注意**：官方标注这是破坏性工具（脚本能改工程），而它绕过本插件的检查点护栏——需要备份时先自己调 `qing_color_copy_grade` 之外的时间线复制，或让用户确认。
+
+- 【副作用】执行任意 Resolve 操作（沙箱内，无文件/网络/子进程权限）；可能修改工程且**不建检查点**。
+- 【触发时机】脚本 API 有明确能力、但本插件尚未提供对应工具时。优先用现成工具。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `script` | string | 是 | 要执行的 Python 脚本。用 result 变量返回结构化数据。 |
+| `timeout` | integer | 否 | 超时秒数（默认 10，上限 60）。 |
+
+### `qing_official_run_script_unsafe` — 运行脚本（完全系统权限） ⚠️
+
+在**不受限**的 Python 3.14 里执行脚本，除 Resolve API 外还能访问文件系统、网络与子进程。只有当 `qing_official_run_script` 确实做不到时才用（例如需要写本地文件、调用外部程序、或访问网络）。
+
+**这是本插件风险最高的工具**：它能改工程、也能动磁盘上的任意文件，而且绕过本插件的检查点与 Pre-flight 护栏。调用前必须让用户明确知情并同意。
+
+- 【副作用】执行任意 Python：可读写任意文件、访问网络、起子进程、改工程，且**不建检查点**。
+- 【触发时机】沙箱版确实做不到（需要文件系统/网络/子进程），且用户已明确同意承担风险时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `script` | string | 是 | 要执行的 Python 脚本。用 result 变量返回结构化数据。 |
+| `timeout` | integer | 否 | 超时秒数（默认 10，上限 60）。 |
+
+### `qing_official_scripting_api` — 取脚本 API 存根 🔍
+
+返回最新脚本 API 的 Python 存根（.pyi）。`api` 选三套之一：`DaVinciResolveScript.pyi`（主 API，163 KiB）、`fusion_api.pyi`、`ui_api.pyi`。**省钱三招**：`outline=true` 只要顶层定义清单（类名+一句话说明）；`types=["Timeline","TimelineItem"]` 只要这几个定义；`as_file=true` 写到磁盘只回路径，配合本地 grep 读，不吃上下文。写 `qing_official_run_script` 前想确认签名时用这个或 `qing_official_search_api`。
+
+- 【副作用】只读；会起一个官方 MCP 子进程再关闭。as_file=true 时在磁盘写一个 .pyi 文件。
+- 【触发时机】要确认某个 API 的精确签名/参数默认值，或本地存根与运行版本可能不一致时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `api` | enum | 否 | 取哪一套存根（默认主 API）。（默认 'DaVinciResolveScript.pyi'） |
+| `types` | string[] | 否 | 只返回这些顶层定义（类 / TypedDict / 别名 / 函数），如 ["Timeline"]。留空返回全部。 |
+| `outline` | boolean | 否 | 只要顶层定义清单与说明，不要存根正文（便宜得多）。（默认 false） |
+| `as_file` | boolean | 否 | 写到磁盘只返回路径（配合本地 grep，最省上下文）。（默认 false） |
+
+### `qing_official_scripting_docs` — 取开发者文档 🔍
+
+返回 Resolve 开发者文档全文或某一节。`document` 选四份之一：`README.md`（37 KiB，脚本 API 指南：数据结构、设置字典、枚举取值）、`DCTLReadme.txt`（DCTL 语法与内置函数）、`FusionTools.md`、`FusionToolReference.md`。`section` 留默认 `"TOC"` 只回目录；给空字符串回全文；给其它值按 Markdown 标题匹配。存根装不下的细节（设置字典的键、枚举取值）都在这里。
+
+- 【副作用】只读；会起一个官方 MCP 子进程再关闭。as_file=true 时在磁盘写文件。
+- 【触发时机】需要设置字典的键名、枚举取值、DCTL 语法这类存根里没有的细节时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `document` | enum | 否 | 取哪份文档（默认 README.md）。（默认 'README.md'） |
+| `section` | string | 否 | 要返回的章节；"TOC" 只回目录，空字符串回全文，其它值按 Markdown 标题匹配。（默认 'TOC'） |
+| `as_file` | boolean | 否 | 写到磁盘只返回路径（最省上下文）。（默认 false） |
+
+### `qing_official_search_api` — 搜脚本 API 🔍
+
+在脚本 API 存根里按正则搜索，返回匹配的类型、函数、常量与字典字段及其说明。比 `qing_official_scripting_api` 取整份存根便宜得多——**想查一个名字就用这个**。`pattern` 是大小写不敏感的 Python 正则，例如 `marker`、`(Get|Set)Setting`、`GetNodeGraph`。
+
+- 【副作用】只读；会起一个官方 MCP 子进程再关闭。
+- 【触发时机】想知道某个 API 存不存在、叫什么、参数是什么时——先搜，别整份拉。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `pattern` | string | 是 | 大小写不敏感的 Python 正则，如 "marker" 或 "(Get\|Set)Setting"。 |
+| `api` | enum | 否 | 只在这一套存根里搜；留空搜全部三套。 |
+
+### `qing_official_status` — 官方 MCP 状态 🔍
+
+检查 Resolve 是否在运行且可被官方 MCP 访问，返回版本号。比 `qing_resolve_health` 轻：只问官方 MCP 一句，不加载脚本 API、不查工程。诊断「插件连不上但 Resolve 明明开着」时，两个都跑一遍能快速分辨是**脚本 API 通道**坏了还是**官方 MCP 通道**坏了。
+
+- 【副作用】只读；会起一个官方 MCP 子进程再关闭（约 0.1 秒）。
+- 【触发时机】需要快速确认 Resolve 存活、或对比两条通道各自的连通性时。
+
+### `qing_official_tools` — 列出官方 MCP 能力 🔍
+
+列出本机官方 Resolve MCP 提供的**全部工具**及其参数 schema（当前版本 18 个），并报告官方 MCP 是否可用。用来在调用前确认参数名、取值范围与默认值，或在官方 MCP 升级后看看多了什么。注意：本插件的 `qing_official_*` 工具是对这些官方工具的封装；若某个官方工具还没有对应封装，可以用 `qing_official_run_script` 或直接按这里返回的 schema 调官方能力。
+
+- 【副作用】只读；会启动一个官方 MCP 子进程再关闭（约 0.1 秒）。
+- 【触发时机】想确认官方 MCP 可用性、查某个官方工具的确切参数、或排查封装与官方不一致时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `include_schema` | boolean | 否 | 为 true 时返回每个工具的完整 inputSchema；false 只返回名称与描述。（默认 true） |
+
+### `qing_official_whats_new` — Resolve 更新日志 🔍
+
+返回 DaVinci Resolve 的变更日志条目（新功能与行为变化），用于了解模型训练截止之后引入的能力。`since` 可以给版本号（如 "19.0"）或 ISO 日期（如 "2025-01-25"），只返回这之后的条目。
+
+- 【副作用】只读；会起一个官方 MCP 子进程再关闭。
+- 【触发时机】想确认某个 API 是不是新加的、或排查「文档里有但这个版本没有」时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `since` | string | 是 | 你已知的最后一个 Resolve 版本号（如 "19.0"）或最后一个 ISO 日期（如 "2025-01-25"）。 |
+
+### `qing_official_write_dctl` — 写 DCTL
+
+编译并写入（或覆盖）MCP LUT 目录里的 .dctl 文件。DCTL 会作为节点 LUT 生效，用 `Graph.SetLUT(nodeIndex, "MCP/name.dctl")` 应用；已挂该 DCTL 的节点会自动更新。**语法参考**：`qing_official_scripting_docs(document="DCTLReadme.txt")`。
+
+- 【副作用】在 MCP LUT 目录写入/覆盖一个 .dctl 文件（编译失败则报错，不写半成品）。
+- 【触发时机】要用代码精确定义一个色彩变换（比 .cube 更省空间、可带逻辑）时。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `path` | string | 是 | 文件名，如 "cool.dctl"。 |
+| `content` | string | 是 | DCTL 源码。 |
 

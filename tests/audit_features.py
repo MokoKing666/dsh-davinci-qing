@@ -31,7 +31,7 @@ from lib.modules.console_text import use_utf8_console  # noqa: E402
 LIB = REPO / "lib"
 MODULES = LIB / "modules"
 
-#: 六大模块 → 该模块必须提供的工具名（与桥接层注册表对齐）
+#: 七大模块 → 该模块必须提供的工具名（与桥接层注册表对齐）
 MODULE_TOOLS: dict[str, list[str]] = {
     "① 跨平台 IPC 连接与自检": [
         "qing_resolve_health",
@@ -67,6 +67,27 @@ MODULE_TOOLS: dict[str, list[str]] = {
         "qing_deliver_list_presets",
         "qing_deliver_setup_job",
         "qing_deliver_queue_status",
+    ],
+    "⑦ 官方 MCP 完整继承": [
+        "qing_official_tools",
+        "qing_official_launch_resolve",
+        "qing_official_status",
+        "qing_official_whats_new",
+        "qing_official_scripting_api",
+        "qing_official_search_api",
+        "qing_official_scripting_docs",
+        "qing_official_run_script",
+        "qing_official_run_script_unsafe",
+        "qing_official_list_luts",
+        "qing_official_read_dctl",
+        "qing_official_write_dctl",
+        "qing_official_delete_lut_file",
+        "qing_official_generate_lut",
+        "qing_official_list_extras",
+        "qing_official_install_extras",
+        "qing_official_describe_grade",
+        "qing_official_get_image",
+        "qing_official_get_thumbnails",
     ],
 }
 
@@ -356,7 +377,7 @@ def main() -> int:
     if failures:
         print(f"❌ 发现 {len(failures)} 处问题")
         return 1
-    print("✅ 六大模块功能齐全，无空实现 / 占位符 / 孤岛代码")
+    print("✅ 七大模块功能齐全，无空实现 / 占位符 / 孤岛代码")
     return 0
 
 

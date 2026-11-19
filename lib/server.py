@@ -38,6 +38,7 @@ from .modules.mcp_compat import create_server, server_implementation
 from .modules.color_tools import register as register_color
 from .modules.fusion_deliver_tools import register as register_fusion_deliver
 from .modules.media_pool_tools import register as register_media_pool
+from .modules.official_tools import register as register_official
 from .modules.resolve_tools import register as register_resolve
 from .modules.timeline_tools import register as register_timeline
 
@@ -74,6 +75,7 @@ def build_server() -> Any:
     register_timeline(server)
     register_color(server)
     register_fusion_deliver(server)
+    register_official(server)
     return server
 
 
