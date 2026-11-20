@@ -1,4 +1,4 @@
-# dsh-davinci-qing 工具目录（v1.0.4）
+# dsh-davinci-qing 工具目录（v1.0.5）
 
 > 让青青住进你的dsh
 

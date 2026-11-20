@@ -45,6 +45,7 @@ class PythonBridge {
     script;
     env;
     cwd;
+    pythonArgs;
     child = null;
     pending = new Map();
     buffer = '';
@@ -52,11 +53,12 @@ class PythonBridge {
     ready = null;
     stderrTail = [];
     disposed = false;
-    constructor(python, script, env, cwd) {
+    constructor(python, script, env, cwd, pythonArgs = []) {
         this.python = python;
         this.script = script;
         this.env = env;
         this.cwd = cwd;
+        this.pythonArgs = pythonArgs;
     }
     /** 最近一段 Python stderr，用于错误信息里带上下文。 */
     get diagnostics() {
@@ -70,7 +72,7 @@ class PythonBridge {
             let settled = false;
             let child;
             try {
-                child = spawn(this.python, [this.script, '--serve'], {
+                child = spawn(this.python, [...this.pythonArgs, this.script, '--serve'], {
                     cwd: this.cwd,
                     env: this.env,
                     stdio: ['pipe', 'pipe', 'pipe'],
@@ -163,12 +165,15 @@ class PythonBridge {
             }
             else {
                 const detail = message.error ?? {};
-                const error = new Error([detail.message ?? 'Python 桥返回失败',
-                    detail.hint ? `建议：${detail.hint}` : '',
-                    detail.traceback ? `\n${detail.traceback}` : '']
-                    .filter(Boolean)
-                    .join('\n'));
+                // message 与 hint 分开携带：调用方要能只取 hint 写进告警，
+                // 不被 pydantic 的几十行 traceback 淹没。
+                const error = new Error(detail.message ?? 'Python 桥返回失败');
                 error.code = detail.code;
+                error.hint = detail.hint;
+                error.traceback = detail.traceback;
+                if (detail.traceback && detail.code !== 'missing_dependency') {
+                    error.message += `\n${detail.traceback}`;
+                }
                 pending.reject(error);
             }
         }
@@ -320,6 +325,21 @@ export const OUTPUT_SCHEMA = {
 function isReadOnly(annotations) {
     return annotations?.read_only === true;
 }
+/**
+ * 把 Python 侧的结构化错误渲染成一段人能直接照做的中文。
+ *
+ * Python 回来的是 `{code, message, hint}`：`hint` 才是「下一步该敲哪条命令」，
+ * 而 `message` 往往只有 `ModuleNotFoundError: No module named 'pydantic'`。
+ * 启动期的告警必须带上 hint，否则用户看到「取工具清单失败」仍然不知道该装什么。
+ */
+function describeFailure(error) {
+    const failure = error;
+    const message = failure?.message ?? String(error);
+    const parts = [message];
+    if (failure?.hint)
+        parts.push(`建议：${failure.hint}`);
+    return parts.join('\n');
+}
 // ---------------------------------------------------------------------------
 // Cordis 入口
 // ---------------------------------------------------------------------------
@@ -338,20 +358,25 @@ export async function apply(ctx, config = {}) {
     const bridgePath = config.bridgePath
         ? resolve(config.bridgePath)
         : join(PACKAGE_ROOT, 'lib', 'resolve_bridge.py');
-    if (!python) {
-        const message = 'dsh-davinci-qing: 没找到 Python 解释器。\n'
-            + '请在插件配置里设置 pythonPath（指向 python.exe 的绝对路径），'
-            + '或把 Python 加入 PATH。';
+    /**
+     * 统一的降级出口：`failOnStartupError` 为 true 才抛，否则只告警并放弃注册。
+     *
+     * 桥的几条失败路径（没解释器 / 没桥脚本 / 桥起不来 / 拿不到工具清单）必须是
+     * 同一套语义 —— 少一条就会出现「关掉 failOnStartupError 仍然崩宿主」。
+     */
+    const degrade = (message) => {
         if (settings.failOnStartupError)
             throw new Error(message);
         logger.warn?.(message);
+    };
+    if (!python) {
+        degrade('dsh-davinci-qing: 没找到 Python 解释器。\n'
+            + '请在插件配置里设置 pythonPath（指向 python.exe 的绝对路径），'
+            + '或把 Python 加入 PATH。');
         return;
     }
     if (!existsSync(bridgePath)) {
-        const message = `dsh-davinci-qing: 找不到 Python 桥 ${bridgePath}。`;
-        if (settings.failOnStartupError)
-            throw new Error(message);
-        logger.warn?.(message);
+        degrade(`dsh-davinci-qing: 找不到 Python 桥 ${bridgePath}。`);
         return;
     }
     const env = {
@@ -361,15 +386,12 @@ export async function apply(ctx, config = {}) {
         PYTHONPATH: PACKAGE_ROOT,
         ...(config.env ?? {}),
     };
-    const bridge = new PythonBridge(python, bridgePath, env, PACKAGE_ROOT);
+    const bridge = new PythonBridge(python, bridgePath, env, PACKAGE_ROOT, config.pythonArgs ?? []);
     try {
         await bridge.start(settings.startupTimeoutMs);
     }
     catch (error) {
-        const message = `dsh-davinci-qing: Python 桥启动失败 —— ${error.message}`;
-        if (settings.failOnStartupError)
-            throw new Error(message);
-        logger.warn?.(message);
+        degrade(`dsh-davinci-qing: Python 桥启动失败 —— ${describeFailure(error)}`);
         return;
     }
     let specs;
@@ -378,7 +400,8 @@ export async function apply(ctx, config = {}) {
     }
     catch (error) {
         bridge.kill();
-        throw new Error(`dsh-davinci-qing: 从 Python 桥取工具清单失败 —— ${error.message}`);
+        degrade(`dsh-davinci-qing: 从 Python 桥取工具清单失败 —— ${describeFailure(error)}`);
+        return;
     }
     // 每一行注册都是一个 effect：插件卸载时工具随之消失。
     const disposers = [];

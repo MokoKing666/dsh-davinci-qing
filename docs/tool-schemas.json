@@ -1,6 +1,6 @@
 {
   "server": "dsh-davinci-qing",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "slogan": "让青青住进你的dsh",
   "generated_by": "export_schema.py",
   "tool_count": 62,

@@ -35,6 +35,17 @@
    python check_env.py
    ```
 
+   依赖必须装进**插件实际使用的那个解释器**。不确定是哪个就跑一次自检——缺依赖时
+   `check_env.py` 会打出当前解释器的绝对路径和可直接粘贴的安装命令。想省事：
+
+   ```powershell
+   python scripts/setup_venv.py
+   ```
+
+   它会建好 `.venv`、装齐 `requirements.txt`，并把该填进 `pythonPath` 的路径直接印出来。
+   插件按 `.venv` → `python` → `python3` 顺序找解释器；都找不到依赖时**只会降级**
+   （没有工具、日志一条 `missing_dependency` 告警），不会中断 DSH 启动。
+
 2. **在 Resolve 里打开外部脚本**：`首选项 → 系统 → 常规 → External scripting using` 设为 **Local**，然后**重启 Resolve**（改完不重启不生效）。同时要打开一个工程并建好时间线。
 
 3. **让 DSH 连上**：安装本插件后，工具会以 `mcp__davinci__qing_*` 出现在模型工具列表里。第一次对话先说一句"帮我自检 Resolve 环境"，它会调 `qing_resolve_health` 并把不满足的条件逐条列出来。

@@ -50,9 +50,28 @@ if str(_PKG_ROOT.parent) not in sys.path:
     sys.path.insert(0, str(_PKG_ROOT.parent))
 
 from lib import __slogan__, __version__  # noqa: E402
-from lib.modules.errors import QingError  # noqa: E402
+from lib.modules.errors import MissingDependencyError, QingError  # noqa: E402
 
 PROTOCOL_VERSION = 1
+
+
+def _requirements_path() -> Path | None:
+    for candidate in (_PKG_ROOT.parent / "requirements.txt", _PKG_ROOT / "requirements.txt"):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _import_error(module: str, exc: BaseException) -> MissingDependencyError:
+    """把 ``ModuleNotFoundError`` 翻成带解释器与命令的可操作错误。"""
+
+    requirements = _requirements_path()
+    return MissingDependencyError(
+        module,
+        interpreter=sys.executable or None,
+        requirements=str(requirements) if requirements else None,
+        detail={"original": f"{exc.__class__.__name__}: {exc}"},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -121,12 +140,17 @@ def _build_registry(use_mcp_sdk: bool = True) -> tuple[_CollectingServer, Any | 
 
     collector = _CollectingServer(mcp_server)
 
-    from lib.modules.color_tools import register as register_color
-    from lib.modules.fusion_deliver_tools import register as register_fusion_deliver
-    from lib.modules.media_pool_tools import register as register_media_pool
-    from lib.modules.official_tools import register as register_official
-    from lib.modules.resolve_tools import register as register_resolve
-    from lib.modules.timeline_tools import register as register_timeline
+    try:
+        from lib.modules.color_tools import register as register_color
+        from lib.modules.fusion_deliver_tools import register as register_fusion_deliver
+        from lib.modules.media_pool_tools import register as register_media_pool
+        from lib.modules.official_tools import register as register_official
+        from lib.modules.resolve_tools import register as register_resolve
+        from lib.modules.timeline_tools import register as register_timeline
+    except ModuleNotFoundError as exc:
+        # 依赖缺失时给出的必须是「在哪个解释器上装什么」，而不是裸 traceback：
+        # Store 版 Python / 多解释器共存时，装错了解释器是最常见的成因。
+        raise _import_error(exc.name or "unknown", exc) from exc
 
     register_resolve(collector)
     register_media_pool(collector)
@@ -248,7 +272,10 @@ def _schema_from_signature(fn: Callable[..., Any]) -> dict[str, Any]:
 
     import inspect
 
-    from pydantic import TypeAdapter
+    try:
+        from pydantic import TypeAdapter
+    except ModuleNotFoundError as exc:
+        raise _import_error("pydantic", exc) from exc
 
     properties: dict[str, Any] = {}
     required: list[str] = []
@@ -429,6 +456,26 @@ def health() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _error_envelope(exc: QingError) -> dict[str, Any]:
+    """把 `QingError` 摊平成信封里的 `error` 字段。
+
+    ``QingError.to_dict()`` 是**工具结果**的形状（``{"ok": false, "error": <code>}``），
+    不能直接当信封的 ``error`` 用 —— 那样会得到 ``{"error": {"error": <code>}}``，
+    而 TS 壳读的是 ``detail.code``，于是壳层永远拿不到结构化错误码（这正是
+    「缺依赖时只看到一句 ModuleNotFoundError」的根因）。这里把码提到 ``code``。
+    """
+
+    payload = exc.to_dict()
+    envelope: dict[str, Any] = {
+        "code": payload.get("error") or exc.code,
+        "message": payload.get("message", ""),
+        "hint": payload.get("hint", ""),
+    }
+    if payload.get("detail") is not None:
+        envelope["detail"] = payload["detail"]
+    return envelope
+
+
 def _handle(request: dict[str, Any]) -> dict[str, Any]:
     request_id = request.get("id")
     method = request.get("method")
@@ -457,7 +504,7 @@ def _handle(request: dict[str, Any]) -> dict[str, Any]:
             }
         return {"id": request_id, "ok": True, "result": result}
     except QingError as exc:
-        return {"id": request_id, "ok": False, "error": exc.to_dict()}
+        return {"id": request_id, "ok": False, "error": _error_envelope(exc)}
     except Exception as exc:  # noqa: BLE001
         return {
             "id": request_id,

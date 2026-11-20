@@ -3,7 +3,7 @@ name: davinci-qing
 description: 用自然语言驱动 DaVinci Resolve Studio 剪辑、调色、合成与交付。当用户要求操作 Resolve 工程（导入素材、建时间线、落片、改片段属性、打标记、导入字幕）、调色（节点树、LUT、.drx 预设、复制调色、看画面）、Fusion 文字/节点、或交付渲染（预设、队列、开跑）时加载。也用于诊断"连不上 Resolve""脚本接口没反应""这个工具报了 resolve_not_connected"这类环境问题。
 whenToUse: 用户提到 DaVinci Resolve / 达芬奇 / 调色 / 时间线 / 媒体池 / 渲染交付 / LUT / PowerGrade / Fusion 文字，或要求"帮我把这段素材剪一下""让这段画面变暖一点""出个 H.264 母版"。
 metadata:
-  version: "1.0.4"
+  version: "1.0.5"
   plugin: dsh-davinci-qing
   tool-prefix: qing_
   slogan: 让青青住进你的dsh
@@ -27,6 +27,19 @@ user-invocable: true
 | 技能声明 | `SKILL.md`（本文件） | 触发条件、工作流、故障排查 |
 
 TS 侧**不重复实现业务逻辑**——工具 schema 全部来自 Python，因此两边永不漂移。
+
+### 安装前置（缺依赖时插件不崩，只会没有工具）
+
+插件按 `.venv` → `python` → `python3` 顺序找解释器，**依赖必须装在那一个解释器上**。
+首次启用后如果发现工具列表是空的、日志里出现 `missing_dependency`：
+
+```bash
+python scripts/setup_venv.py     # 建 .venv 并装好 requirements.txt
+```
+
+然后把配置里的 `pythonPath` 指向 `.venv/Scripts/python.exe`（Windows）或 `.venv/bin/python3`。
+插件默认 `failOnStartupError: false`，桥起不来只会告警并降级，**不会中断 DSH 启动**；
+设成 `true` 才会在加载期直接抛错。
 
 ## 一、每次会话的固定开场
 
@@ -201,6 +214,7 @@ qing_timeline_export("D:/cut.aaf", export_type="aaf")       # 交给别的剪辑
 | `official_mcp_unavailable` | 官方 MCP 不可用（需要 Resolve Studio 21.1+、且不在模拟器模式）。基础工具照常可用；想用官方层就装 Studio 21.1+ 并确认 `ResolveMCP.exe` 存在 |
 | `unsupported` | 当前版本没有该 API（v19 以下没有 `GetNodeGraph`），按 `hint` 里的替代方案做 |
 | `api_failure` | 参数被 Resolve 拒绝；先 `qing_*_inspect` 读实际状态再改 |
+| `missing_dependency` | 当前 Python 解释器缺依赖。`detail.interpreter` 就是那个解释器，`hint` 里给了可直接粘贴的 `pip install` 命令；想省事就跑 `python scripts/setup_venv.py` 建一个带依赖的 `.venv`，再把配置里的 `pythonPath` 指向它 |
 | `bridge_failure` | Python 桥断了；调一次 `qing_resolve_health`，仍失败就重启 DSH 让插件重拉 Python |
 
 ## 六、边界

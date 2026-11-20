@@ -1,6 +1,6 @@
 {
   "name": "dsh-davinci-qing",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "让青青住进你的dsh —— 连接 DeepSeek Harness 与 DaVinci Resolve Studio 的全流程工作流自动化桥梁，从媒体池归档、时间线粗剪到节点树调色与视觉审片，让创作者把时间留给创作。",
   "license": "MIT",
   "type": "module",
@@ -53,7 +53,9 @@
     "icon.svg",
     "tsconfig.json",
     "requirements.txt",
-    "check_env.py"
+    "check_env.py",
+    "scripts",
+    "tests"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -70,8 +72,10 @@
     "test:smoke": "python tests/smoke_all_tools.py",
     "test:shell": "node tests/verify_ts_shell.mjs",
     "schema": "python export_schema.py",
-    "verify": "npm run check:spec && npm run check:manifest && npm run check:schema && npm run typecheck && npm run build && npm run check:python && npm run test:smoke",
-    "prepack": "npm run build"
+    "verify": "npm run check:spec && npm run check:manifest && npm run check:schema && npm run typecheck && npm run build && npm run check:python && npm run test:smoke && python tests/verify_degrade.py",
+    "prepack": "npm run build",
+    "setup:venv": "python scripts/setup_venv.py",
+    "test:degrade": "python tests/verify_degrade.py"
   },
   "dependencies": {},
   "devDependencies": {

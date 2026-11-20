@@ -116,6 +116,44 @@ class OfficialMcpUnavailableError(QingError):
     )
 
 
+class MissingDependencyError(QingError):
+    """插件用的 Python 解释器缺少运行时依赖（通常是 pydantic）。
+
+    这条错误故意把「哪个解释器」和「装什么」都写进 hint：依赖装错解释器
+    （尤其是 Microsoft Store 版 Python）是这类问题最常见的成因。
+    """
+
+    code = "missing_dependency"
+
+    def __init__(
+        self,
+        module: str,
+        *,
+        interpreter: str | None = None,
+        requirements: str | None = None,
+        detail: Any = None,
+    ) -> None:
+        where = f"（解释器：{interpreter}）" if interpreter else ""
+        given = interpreter or "python"
+        target = f' -r "{requirements}"' if requirements else ""
+        super().__init__(
+            f"缺少 Python 依赖 {module!r}{where}",
+            hint=(
+                f"在插件用的那个解释器上装依赖：\n"
+                f'  "{given}" -m pip install{target or " " + module}\n'
+                "或者一键建虚拟环境（推荐，避免依赖装到系统 Python 上找不回来）：\n"
+                f'  "{given}" scripts/setup_venv.py\n'
+                "装好后重启 DSH，让插件重新拉起 Python 桥。"
+            ),
+            detail={
+                "module": module,
+                "interpreter": interpreter,
+                "requirements": requirements,
+                **(detail or {}),
+            },
+        )
+
+
 class BackupFailedError(QingError):
     """安全检查点（保存工程 + 复制时间线）失败。"""
 
@@ -137,5 +175,6 @@ __all__ = [
     "ApiFailureError",
     "UnsupportedError",
     "OfficialMcpUnavailableError",
+    "MissingDependencyError",
     "BackupFailedError",
 ]

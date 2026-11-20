@@ -80,6 +80,23 @@ def _check_dependencies() -> tuple[bool, list[str]]:
     except Exception:  # noqa: BLE001
         lines.append(f"{ICON_WARN} 未安装 Pillow（仅影响模拟器生成预览图，不影响真实 Resolve）")
 
+    # 缺依赖时最容易踩的坑是「装到了另一个解释器上」，所以把位置和补救命令
+    # 一起打出来 —— issue #1 报的就是 Store 版 Python 上找不到 pydantic。
+    if not ok:
+        requirements = PACKAGE_ROOT / "requirements.txt"
+        lines.append("")
+        lines.append(f"{ICON_INFO} 当前解释器：{sys.executable}")
+        lines.append(f"{ICON_INFO} 缺什么就装什么，在**这个**解释器上执行：")
+        lines.append(f'       "{sys.executable}" -m pip install -r "{requirements}"')
+        lines.append(f"{ICON_INFO} 或者让脚本替你建一个带依赖的 .venv：")
+        lines.append(f'       "{sys.executable}" "{PACKAGE_ROOT / "scripts" / "setup_venv.py"}"')
+        venv_python = PACKAGE_ROOT / ".venv" / ("Scripts" if os.name == "nt" else "bin") / (
+            "python.exe" if os.name == "nt" else "python3"
+        )
+        if venv_python.is_file():
+            lines.append(f"{ICON_OK} 检测到现成的 .venv：{venv_python}")
+            lines.append('       在插件配置里设 pythonPath 指向它即可。')
+
     return ok, lines
 
 

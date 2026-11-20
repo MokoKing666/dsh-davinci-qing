@@ -29,6 +29,13 @@ export interface Config {
     pythonPath?: string;
     /** `lib/resolve_bridge.py` 的路径。留空用包内默认位置。 */
     bridgePath?: string;
+    /**
+     * 追加给 Python 解释器的参数（排在 `resolve_bridge.py --serve` 之前）。
+     *
+     * 用来应付「解释器本身要带参数」的场合，例如 `["-S"]`（屏蔽 site-packages，
+     * 用来复现缺依赖）或 `["-X", "utf8"]`（强制 UTF-8 模式）。
+     */
+    pythonArgs?: string[];
     /** 单次工具调用的超时（毫秒）。达芬奇渲染类操作可能很久，默认 3 分钟。 */
     toolTimeoutMs?: number;
     /** Python 桥启动的超时（毫秒）。首次导入 PIL / mcp SDK 会慢一些。 */
